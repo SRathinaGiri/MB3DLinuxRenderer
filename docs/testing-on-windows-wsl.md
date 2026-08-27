@@ -1,6 +1,6 @@
 # Test MB3D Linux Renderer on Windows with WSL
 
-This guide tests the precompiled `v0.3.0` release on a Windows x86-64
+This guide tests the precompiled `v0.4.0` release on a Windows x86-64
 computer. It does **not** install Free Pascal, Lazarus, GCC, 32-bit glibc, or
 any other development package.
 
@@ -49,12 +49,12 @@ The final command should show `Debian` with version `2`.
 Run these commands in normal Windows PowerShell:
 
 ```powershell
-$release = "https://github.com/SRathinaGiri/MB3DLinuxRenderer/releases/download/v0.3.0"
-$archive = "$env:USERPROFILE\Downloads\mb3d-worker-v0.3.0-linux-i386.tar.gz"
+$release = "https://github.com/SRathinaGiri/MB3DLinuxRenderer/releases/download/v0.4.0"
+$archive = "$env:USERPROFILE\Downloads\mb3d-worker-v0.4.0-linux-i386.tar.gz"
 $checksum = "$archive.sha256"
 
-curl.exe -L "$release/mb3d-worker-v0.3.0-linux-i386.tar.gz" -o $archive
-curl.exe -L "$release/mb3d-worker-v0.3.0-linux-i386.tar.gz.sha256" -o $checksum
+curl.exe -L "$release/mb3d-worker-v0.4.0-linux-i386.tar.gz" -o $archive
+curl.exe -L "$release/mb3d-worker-v0.4.0-linux-i386.tar.gz.sha256" -o $checksum
 
 $expected = ((Get-Content $checksum) -split '\s+')[0].ToLower()
 $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
@@ -69,7 +69,7 @@ Do not continue if checksum verification fails.
 Still in PowerShell, run:
 
 ```powershell
-wsl -d Debian -- bash -lc "mkdir -p ~/mb3d-test && tar -xzf /mnt/c/Users/$env:USERNAME/Downloads/mb3d-worker-v0.3.0-linux-i386.tar.gz -C ~/mb3d-test"
+wsl -d Debian -- bash -lc "mkdir -p ~/mb3d-test && tar -xzf /mnt/c/Users/$env:USERNAME/Downloads/mb3d-worker-v0.4.0-linux-i386.tar.gz -C ~/mb3d-test"
 wsl -d Debian
 ```
 
@@ -77,7 +77,7 @@ The second command opens the Debian shell. Verify the platform and worker:
 
 ```sh
 uname -m
-cd ~/mb3d-test/mb3d-worker-v0.3.0-linux-i386
+cd ~/mb3d-test/mb3d-worker-v0.4.0-linux-i386
 ./run-mb3d-worker --version
 ```
 
@@ -85,7 +85,7 @@ Expected output:
 
 ```text
 x86_64
-mb3d-worker 0.3.0 (headless RGB renderer)
+mb3d-worker 0.4.0 (headless RGB renderer)
 ```
 
 No `apt install` command is required.
@@ -105,10 +105,10 @@ Alternatively, open this address in Windows File Explorer and copy the M3A
 into the release directory:
 
 ```text
-\\wsl$\Debian\home\YOUR_DEBIAN_USERNAME\mb3d-test\mb3d-worker-v0.3.0-linux-i386
+\\wsl$\Debian\home\YOUR_DEBIAN_USERNAME\mb3d-test\mb3d-worker-v0.4.0-linux-i386
 ```
 
-M3A v5 input is supported in `v0.3.0`. Direct M3P loading is not implemented
+M3A v5 input is supported in `v0.4.0`. Direct M3P loading is not implemented
 in this release yet.
 
 ## 5. Run a small mono smoke test
@@ -194,7 +194,7 @@ For a faster full-size preview, use `--shadows off`.
 Include `./` before the launcher and run it from the extracted directory:
 
 ```sh
-cd ~/mb3d-test/mb3d-worker-v0.3.0-linux-i386
+cd ~/mb3d-test/mb3d-worker-v0.4.0-linux-i386
 ./run-mb3d-worker --version
 ```
 

@@ -146,7 +146,7 @@ begin
     end;
     if (Argument = '--version') then
     begin
-      WriteLn('mb3d-worker 0.3.0 (headless RGB renderer)');
+      WriteLn('mb3d-worker 0.4.0 (headless RGB renderer)');
       Exit(ExitSuccess);
     end;
     if Argument = '--animation' then
