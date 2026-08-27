@@ -12,7 +12,7 @@ function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
 
 implementation
 
-uses Classes, SysUtils, Types, Calc, HeaderTrafos, MB3DPortablePNG,
+uses Classes, SysUtils, Types, Math, Calc, HeaderTrafos, MB3DPortablePNG,
   MB3DHeadlessShading, MB3DHeadlessAmbientShadow;
 
 function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
@@ -25,9 +25,10 @@ var LightVals: TLightVals;
     Pixels: TByteBuffer;
     Rect: TRect;
     Index, HitCount, MinHitZ, MaxHitZ, DirectionalLights, SkippedLights,
-    ShadowedPixels, HardShadowedPixels, HardShadowLights, LightIndex: Integer;
+    ShadowedPixels, HardShadowedPixels, HardShadowLights, LightIndex,
+    DepthFoggedPixels, DynamicFoggedPixels: Integer;
     DESteps: Int64;
-    MeanOcclusion: Single;
+    MeanOcclusion, MeanDepthFog, MeanDynamicFog: Single;
     Options: TMB3DRenderOptions;
 begin
   Result := False;
@@ -104,7 +105,13 @@ begin
   begin
     if ApplyHeadlessAmbientShadow(Header, Samples, ShadowedPixels,
       MeanOcclusion) then
-      WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"portable-horizon",',
+      if ((Header.bCalcAmbShadowAutomatic shr 1) and 7) = 4 then
+        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"mb3d-24bit-radial",',
+          '"passes":', Max(1, Header.SSAORcount), ',"shadowedPixels":',
+          ShadowedPixels, ',"meanOcclusion":',
+          FormatFloat('0.######', MeanOcclusion), '}')
+      else
+        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"portable-horizon",',
         '"shadowedPixels":', ShadowedPixels, ',"meanOcclusion":',
         FormatFloat('0.######', MeanOcclusion), '}');
   end
@@ -114,10 +121,17 @@ begin
     WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"disabled",',
       '"shadowedPixels":0,"meanOcclusion":0}');
   end;
-  ShadeMB3DFrame(Header, Samples, CalculateHardShadows, Pixels,
-    DirectionalLights, SkippedLights);
+  ShadeMB3DFrame(Header, LightVals, Samples, CalculateHardShadows, Pixels,
+    DirectionalLights, SkippedLights, DepthFoggedPixels, DynamicFoggedPixels,
+    MeanDepthFog, MeanDynamicFog);
   WriteLn('MB3D_EVENT {"type":"shading","mode":"rgb","directionalLights":',
     DirectionalLights, ',"unsupportedLights":', SkippedLights, '}');
+  WriteLn('MB3D_EVENT {"type":"fog","mode":"depth-and-dynamic",',
+    '"depthPixels":', DepthFoggedPixels, ',"meanDepth":',
+    FormatFloat('0.######', MeanDepthFog), ',"dynamicPixels":',
+    DynamicFoggedPixels, ',"meanDynamic":',
+    FormatFloat('0.######', MeanDynamicFog), ',"dynamicIterations":',
+    Header.bDFogIt, '}');
   Result := SaveRGB8PNG(OutputFile, Header.Width, Header.Height, Pixels, ErrorText);
 end;
 

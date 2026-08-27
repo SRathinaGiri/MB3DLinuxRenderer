@@ -2,8 +2,9 @@
 
 The i386 worker now loads native `.m3a` animation frames, executes external
 `.m3f` formula code, ray-marches geometry, applies saved palettes, directional
-lights, ambient shadow, gamma, and optional formula-ray hard shadows, and
-writes RGB PNG files without Lazarus LCL or a display server.
+lights, MB3D's 24-bit radial ambient shadow, gamma, depth/dynamic fog, and
+optional formula-ray hard shadows, and writes RGB PNG files without Lazarus
+LCL or a display server.
 
 Build from the repository root in Ubuntu/WSL:
 
@@ -48,12 +49,33 @@ a worker run forever. Use `--shadows off` for previews.
 
 Current fidelity limits:
 
-- ambient shadow is a portable multiscale horizon pass, not yet the original
-  GUI 24-bit SSAO implementation;
+- randomized 24-bit radial SSAO (MB3D ambient-shadow mode 4) uses the original
+  32-direction multiscale kernel and `SSAORcount` accumulation. The headless
+  worker uses a stable random phase so repeated renders are reproducible;
+- the other legacy ambient-shadow modes still use the portable horizon pass;
 - enabled global directional lights are supported; positional lights and
   light-map lights are reported as unsupported in the shading event;
-- dynamic fog, specular reflection, background maps, transparency, and the
-  remaining GUI post-process chain still need GUI-free ports.
+- saved depth fog and two-color dynamic fog are supported; visible volumetric
+  light shapes still need parity validation;
+- specular reflection, background maps, transparency, and the remaining GUI
+  post-process chain still need GUI-free ports.
+
+Run the portable rendering regression tests with:
+
+```sh
+bash scripts/test-linux-worker-i386.sh
+```
+
+To measure parity, render the same frame and dimensions to PNG in Windows
+MB3D and in the Linux worker, then run (Python 3 standard library only):
+
+```sh
+python3 scripts/compare-renders.py windows-reference.png linux-render.png
+```
+
+The report includes changed-pixel percentage, mean absolute channel error,
+RMSE, and maximum channel error. Optional `--max-mae` and
+`--max-channel-error` limits make the command suitable for regression tests.
 
 The executable has no GUI/display dependency. For a relocatable distribution
 that does not require `libc6:i386` to be installed on the target, build the
