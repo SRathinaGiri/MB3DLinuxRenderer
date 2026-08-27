@@ -1,0 +1,11 @@
+[OPTIONS]
+.DEscale = 1
+.SIpower = 2
+.Version = 9
+[SOURCE]
+procedure MyFormula(var x, y, z, w: Double; PIteration3D: TPIteration3D);
+begin
+
+end;
+[END]
+

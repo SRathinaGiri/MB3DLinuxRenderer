@@ -1,0 +1,220 @@
+[OPTIONS]
+.Version = 2
+.DEoption = -1
+.Double Blank = 0.0
+.Double TwistDisp = 0.0
+.Double OscillationDisp1 = 0.0
+.Double OscillationDisp2 = 0.0
+.Double AccordionStart= -0.66
+.Double CycleLength= 1
+.Double AccordionEnd= 4.0
+.Double Twist= 0
+.Double OscillationStrenth1= 0.0
+.Double OscillationLength2 = 0.66
+.Double OscillationStrenth2 = 0.0
+.Double OscillationLength2 = 1.32
+.Double NumberOfSplits = 5.0
+.Double splitRadius = 2.66
+.Double Thick = 0.0
+.Double SplitAdjust = 0.0
+[CONSTANTS]
+Double = 1.57079632679
+Double = 2.0
+Double = 0.5
+Double = 4.0
+Double = 3.1415926535898
+Double = .4999999999
+Double = 0.78539816339
+Double = 6.28318530718
+Double = .05
+[CODE]
+558BEC81ECC80000005356578B75088B7E308BD8D9D0
+
+dd03dd5d98dd4780d9e0d9e8dec1dd5dd8
+dd47b8dd55f8
+d9e4dfe09b9e743dddd8dd03dc4df8dc07dc47e8
+d9fbdd5df8dd55f0dd01dec9dd02dc4df8dec1dd02dc4df0dd01dc4df8d9e0dec1
+dd45d8DEC9dd1aDD45d8DEC9dd19eb10ddd8dd45d8dc0add1add45d8dc09dd19
+
+dd4790d9e1
+dc5710dfe09b9e7305ddd8dd4710dd5d90
+
+
+
+dd4720dc7590dd55e8dd55e0d9c0d9e0
+DC8778FFFFFFdd5dd8
+dc4f08dd4590d9e8d9e0dec1dec9dd5dd0
+dd07dc4f08dc4f08dd55f8dc7590dd5df0dd4590dc6728d9fc
+
+
+dd55c0dd5dc8dd01dd02d9f3d9e4dfe09b9e7303dc45f8dd55b0
+
+dc55f0dfe09b9e0f86f2000000
+dd45e8dc45f0dd5de8
+dd45d8dc45d0dd5dd8dc65f0
+dd45c0d9e8d9e0dec1d9e4dfe09b9e7405dd5dc0ebc8
+
+
+ddd8ddd8dd01d8c8dd02d8c8dec1d9fadd5dC0
+DD45c8dc4590dc7590dc4f20dd5d88dd4590dc65c8dc7590dc4f20d9e0dd55d0dc45e0dd5d80
+DD45B0
+dc5588dfe09b9e7605dc4580eb03dc6580d9fbdc4dC0dd1adc4dC0dd19dd45d0dc4738d9fb
+
+dd4598dc4fa8dc47e0d9ffdc4f88dc4fb0dc4788
+dd55a8dec9d9e0dc02dd1add45a8dec9d9e0dc01dd19
+dd01d8c8dd02d8c8dec1d9fadd4598dc4f98dc47d8d9ffd9d090
+dc4fa0dec1dd5dc0dd01dd02d9f3dc45d8dc4580d9fbdc4dc0dd1adc4dc0dd19
+
+
+eb68
+
+ddd8dd45e8d9fbdd4598dc4fa8dc47e0d9ffdc4f88dc4fb0dc4788
+dd55a8dec9d9e0dc02dd1add45a8dec9d9e0dc01dd19
+dd02d8c8dd01d8c8dec1d9fadd4598dc4f98dc47d8d9ffdc4fa0dec1dd5df8d9d090
+dd01dd02d9f3dc45d8d9fbdc4df8dd1adc4df8dd19
+
+dd47c8d9e4dfe09b9e7507ddd8e91d010000ddd8
+dd47c0dc67d0d9e1dd47c8d9e1dd5dc8dc55c8dfe09b9e7305dd5dc8eb02ddd8
+dd47c0dc67d0D9E4DFE09b9eddd8dd45c8d9e10f83e8000000
+d9e0dd5dc8dd03d9d0dc57d0dfe09b9e7607ddd8e9c9000000
+dc57c0dfe09b9e730Ddc67c0dc47d0dd1be9b3000000
+dd45c8dd47c0dc67d0D9F5DFE0F6C40475F7dd5dc0ddd8d9d0d9d0
+d9d0dd47c0dc65c0dd5db8dc55b8dfe09b9e7336
+d9d0
+dc65b8dd45c0dc4f10dd5dc8dc55c8dfe09b9e760Adc47d0dd1be963000000
+ddd8dd47c0dd03d9e0dec1dc47d0dd1be94e000000
+dd47d0dd47c8d9e1d9e0dec1dd5dc0
+dd45c0d9c9D9F5DFE0F6C40475F7ddd8d9d0
+dc67d0dd45c8dc4f10dd5dc0dc55c0dfe09b9e7607dc47d0dd1beb0c
+d9e0dd45c8dec1dc47d0dd1b
+e9d6000000e9d100000090
+DD5DC890dd03dc57d0dfe09b9e7307ddd8e9ba000000
+dc57c0dfe09b9e760Ddc67c0dc47d0dd1b
+e9a4000000
+dd45c8dd47c0dc67d0D9F5DFE0F6C40475F7dd5dc0ddd8d9d0d9d0
+dd47c0
+dc65c0dd5db8dc55b8dfe09b9e762e
+dc65b8dd45c0dc4f10dd5dc8dc55c8dfe09b9e7307
+dc47d0dd1beb5b
+ddd8dd47c0dd03d9e0dec1dc47d0dd1beb49
+dd47d0dd47c8d9e1dec1dd5dc0dc55c0dfe09b9e760b
+dd47c8d9e1d9e0dec1ebec
+dc67d0dd45c8dc4f10dd5dc0dc55c0dfe09b9e7307dc47d0dd1beb0cd9e0dd45c8dec1dc47d0dd1b
+
+
+
+dd4598dd5ec8D9D08BC35F5E5B89EC5DC20800
+[END]
+	Blanks are.. because I put stuff in that I took out and I haven't cleaned up the code yet.
+	IT IS MESSY!  Disassembly will result in frustration and maniacal laughter.  
+
+  Accordion function is like box counting along the x-axis, except it is continuous (it does not cause
+  breaks like box tiling... but I'm sure you can get it to cause breaks if you try).
+  
+    Start is basically where you start copying from, cycle is the cycle length, end is where it ends.
+	
+	if cycle= 2    start is -1, and end is 10:
+   Starting at x=-1, x goes up to 0 then down to -1 at x=1,
+   from 1 to 2 x goes up to 0,  2 to 3 x goes down to -1,
+   3 to 4 up to 0, 4 to 5 down to -1,5 thru 9 does it a few more times,
+   at 9,it splits the last cycle in half, so starts at -1, goes to -.5, back to -1;
+   after the end.. x just goes up.  
+   
+   Twist twists it along the length of the function.  Only twist on iteration 1 if you're doing
+   multiple iterations to do the split thing!
+   
+   Oscillations apply along the length of the function.  Sort of fun to play with, mixed with 
+   spherical Mengers, accordion function, and a bit of oscillations with the split function.  
+   You can make pretty Menger pseudofractals with just oscillations, twists, and accordion,
+   and split.  
+   
+   Number of Splits: number of splits (yup).
+   If you set it to an integer value, you can do neat stuff as long as you align the fractals
+   using SplitAdjust on the last iteration you do in a row!
+   
+   SplitAdjust aligns the fractals in the splits. 
+   If you're just doing Mengers?  You don't really need to align them (well, the one I use!)
+   because they are already symmetrically aligned at SplitAdjust=0 so you can just do multiple
+   iterations.  
+   
+    You can rotate Mengers 45 degrees (.7853982) and play with them too- although if you change
+	the polygon shape of the Menger (make it a triangle or hexagon instead), you need to be
+	careful (well, you're not going to break anything) if you're doing multiple spliterations.
+   
+   
+   If you're doing the BT1PinegonV2?  You need 2 formula tabs at the moment.  The last one only
+   do one iteration, and set SplitAdjust to approximately .5236  (pi/6).  The first on you can
+   leave at SplitAdjust=0.  
+   
+   
+   
+   Here's a multisplit example with BT1PinegonV2, MengerIFS_B_2.0, and this formula.
+If you switch it from Menger to BT1Pinegon, activate the second slot with this formula 
+in it- it has .5236 in SplitAdjust.  Actually- it might have .532 because I was using 
+the wrong value for a while because.. umm.. I typed wrong?  Nah.. I just don't have
+pi/6 memorized. mehh.   
+   
+   Mandelbulb3Dv18{
+g.....s/...c3...w....2....Uq4JbehvHH.vGfolbG/45E.O9P7Rnlk.Y1u8arN7g2.dcjhKwaufwj
+................................r7BL5R4Zly1........Y./..................y.2...wD
+...Uz6....ER/.../M.0/.....kY/...O/....E3.....MqYf4SsH0tD/..........G0dkpXm1.....
+./....kD12..02............................................U0.....y1...sD...../..
+.z1...sDH6SHF80IOxPxdU4OS8NXzwls5Y5L.prDdR./myQsUxXUvX/W9O4Tza2J1cvMdqsD3kX0o.2L
+EyXXZGo7WSnMz.BFsa.ZM9pjU.....oOF.............sD.6....sD..G.....................
+.............oAnAt1...sD....zw1.........................................7....k1.
+.....4iSoz1.......kz.cF0c1kG.s6.P....U5....O....m....c3...k1....o....A1.....SN5Y
+...U.W1Q3JJT94NJ8gW9J/....6.pc..oiyi..kvrEtMc7xD6ocyFE0ujz1..........2.28.kFrA0.
+.Ub96aAIVz9.1se7Umvxz0........../EU0.wzzz1...........s/...................E.2c..
+zzzz.............0........E..........2./8.kzzzD............8....................
+/EU0.wzzz1...................................YxzV1UvNPcveeWCNq0.yRiibHJJHDxo..XR
+SvBmx3CcN/UvNPcvQsLsUa3.ibhVi1bTV1OK.sSq4uCly3CcN/UvNPcvMwLsUa3.ibhVinqTV1OK.sSq
+4uCkz3CcN/UvNPcv..EsUa3feeWCNqGQIJ36wk8EwyLsUa3f................................
+E....EE7F3.0....I...../...kL0FpRdB5R07LMdFqLKJXRn6KNo34.Z7KNaxaQZ/..............
+.....................................................wFVf53iSIyj........kz1.....
+...2./....................k53iSIsuFtz...........TIsuFVf5pz1........4.h53iSIsuR.E
+...........................3....E....wZEIRLOnFbEm3KOYxZJpMbATB5PdBKNWJaNj7LN....
+..........................................................................kzzzzz
+zzzxz................................wFVf53iSIyD..........k53iSIsuFxz........./E
+..........2..........w4w3aAJ/1yD.....E/...E1....0FJAEZaPZRqPiNZA.MJBq3nL2ZaNDBrM
+..................U.06U.0.................2........../........zD................
+........................D/2...................zD..........2.......kH./......../E
+........kznkpX0LD8Qyz...........KaNaNaNaNyH.....I....w....EHZtqNZ7LG4BpL0xZAq/1.
+..........................U/4MU.06......0..........0./........zD........kz1.....
+...sz...................................................kz1..................U.E
+........E.2........wz.........zD........kz1.............}
+{Titel: starslices2}
+
+
+  Here is a pretty pillar example, uses this formula and MengerIFS_B_2.0.  
+  Change twist a bit, the oscillations, the polystrength of the Menger 
+  (I think I coded it wrong!! :D  Should check, but it works... )
+  
+  
+  Mandelbulb3Dv18{
+g.....E/...k1...w....2....kDo5OaGZ2E.vTMM0ysc54Emf8YsHB85.ohfSnrSTP..PhjRc.Oi30k
+................................T2r8yQES3z1........Y./..................y.2...wD
+...Uz6....UQ..../M.0/.....k6/...Y/....E3.....wl0RNlfPFsD/.......BJJ/0dkpXm1.Deee
+z.kAnAfD12..0..........wz.................................U0.....y1...sD...../..
+.z1...sDYnunDJB50yXvKG8R4kZQzWDjZ0/N8RojW6.a7pxBFxHFcBRmlP8EzcDQTOubrEsDfTzWJRK3
+mxP48eTfZEWUziZY8o4rLtoDU.....oM0.............sD.6....sD..G.....................
+.............oAnAt1...sD....zw1.........................................L....k1.
+.....4iSoz1.......kz.wzzz1.U..6.P....U5...EB....m....c3....F....6/...I1.....SF52
+...U.qFG9yzb2zzzRYoWzz7lz16.pc..zXCc..kvrEtMc7xD6ocyFE0ujz1..........2.28.kFrA0.
+.Ub96aAIVz9.1se7Umvxz0........../EU0.wzzz1...........s/...................E.2c..
+zzzz.............0...................2./8.kzzzD............8....................
+/EU0.wzzz1...................................2CcN/UvNPcveeWCNq0.yRiibHJJUk1f..XR
+SvBmx3CcN/UvNPcvQsLsUa3.ibhVi1bTV1OK.sSq4uCly3CcN/UvNPcvMwLsUa3.ibhVinqTV1OK.sSq
+4uCkz3CcN/UvNPcv..EsUa3feeWCNqGQIJ36wk8EwyLsUa3f................................
+E....AU6V2E.....I....w....EHZtqNZ7LG4BpL0xZAq/1.Z/EN.61...................U/4MU.
+06......0.........k/.dNaNaNaNaxD........2.YNaNaNaNawz...........................
+........................kz9.................../E........E.2...................zD
+........kz1..........2.....3....E....wZEIRLOnFbEm3KOYxZJpMrAWJ4RV/ENmJaPoxoQX/..
+................................................................BnAnAnAnIzvAnAnA
+nAnqz........03E42MZ1h6P5zHnAnAnAnAtzwFVf53iSIyDOaNaNaNaVznAnAnAnAnuz........E/E
+JsuFVf531.YaNaNaNaNez0........../....E/...k1....BJaPbJaQ7NoIT7oLmM5A............
+................4MU/06U......6..........6.2........wz.........zD........Uz1.....
+...............................................E........kz1........2./......../E
+..........EnAnAnAnApz.........zD............}
+{Titel: for formula}
+
+

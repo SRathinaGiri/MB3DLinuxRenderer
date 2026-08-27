@@ -1,0 +1,57 @@
+[OPTIONS]
+.Version = 4
+.DEscale = .2
+.DEoption = 11
+.RStop = 1024
+.SIpower = 2
+.Double Scale =   -2
+.Boxscale Min R = 0.5
+.Double Fold = .5
+.Double Scale vary = 0
+.Integer Sharpness (Integer) = 3
+[CONSTANTS]
+Double = .5
+[CODE]
+558BEC81EC400000005356578B75088B
+7E308BD881C680000000D9D0EB539090
+908B47CC48DD55D0DC4DD04883F8007F
+F7C3D9E4DFE0D0EC7207D9E8D95DECEB
+06D9E8D9E0EBF5D9E1D9C0E8D1FFFFFF
+D9C9DD47D8D8C0D8E1D8CAD8C1D9CAD9
+E8DEC1D9CAD8F2D84DECD9CADDD8DDD8
+C3DD03E8BAFFFFFFDD13DD02E8B1FFFF
+FFDD12DD01E8A8FFFFFFDD11D9D0837E
+50007F09FF4650DD47F0DD5E48DD4648
+D9E8D9C1D9E1DEE1DC4FD0DEC1DD5E48
+90DD03D8C8DD02D8C8DD01D8C8DEC1DE
+C190D9E8DC47E0DC0F90DD5DF0D9E8DC
+67E0DC0F90DD5DE890DC65F0D9E4DFE0
+D0EC7207D9E8D95DE4EB06D9E8D9E0EB
+F5D9E1DC75E8DD55DCE823FFFFFFDD5D
+D490DD45DCDC45D490D9E890DC45D4DE
+F9D84DE4DC4DE8DC45F090DD4648DEF1
+DD4108D8C990DD590890DCCBDCCADEC9
+DC46A8DD19DC46A0DD1ADC4698DD1BD9
+D08BC35F5E5B8BE55DC20800
+[END]
+WARNING! If you use very high sharpness, I don't know what will happen (it may become
+extremely slow)... But it has no sense
+An Amazing Box, with Folding function modified as follows (x is each spatial coord);
+
+ xp = x**p; (fast int pow)
+ u=sgn(x)*xp;
+ x=x+xp*(2*Fold-x);
+ x=x/u;
+
+Also radius folding is smooth (beware! don't use minr = 1 or out of range 0-1 !!!);
+
+ m=(1+minr)/2; n=(1-minr)/2; r1=(r-m)/n; rs=sgn(r1); r1=abs(r1);
+ rp=r1**p; (fast int pow)
+ r = rs*((rp+r1)/(rp+1) * n) + m;
+
+This "smoothens" the folding function, replacing the "sawtooth" fold with a smooth curve
+Result is very similar to standard ABox but with a bit of detail loss and "curvy" details...
+Higher sharpness -> You get closer and closer to standard ABox...
+Inspired from an idea of Buddhi @ FractalForums.
+
+Luca GN 2011
