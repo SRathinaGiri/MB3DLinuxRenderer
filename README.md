@@ -61,6 +61,9 @@ not need Lazarus, Free Pascal, 32-bit glibc packages, or a display server.
 See [docs/headless-renderer.md](docs/headless-renderer.md) for the complete CLI
 examples and current rendering-fidelity limits.
 
+For a compiler-free test on Windows, follow
+[docs/testing-on-windows-wsl.md](docs/testing-on-windows-wsl.md).
+
 ## License
 
 The port retains the Mandelbulb3D source license in [License.txt](License.txt).
