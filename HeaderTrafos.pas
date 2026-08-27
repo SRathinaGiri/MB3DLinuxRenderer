@@ -1069,11 +1069,152 @@ end;
 
 procedure MakeLightValsFromHeaderLight(Header: TPMandHeader10;
   Lvals: TPLightVals; ImScale: Double; StereoMode: Integer);
+var
+  HLight: TPLightingParas9;
+  I: Integer;
+  Lamp, LightScale, AmbientScale, Temp, DTemp: Single;
+  AngleX, AngleY: Double;
+  CameraMatrix: TMatrix3;
 begin
   FillChar(Lvals^, SizeOf(Lvals^), 0);
   Lvals.PLValigned := TPLValigned((PtrUInt(@Lvals.LColSbuf[0]) + 15) and
     not PtrUInt(15));
+  HLight := @Header.Light;
+  CalcStepWidth(Header);
   StereoChange(Header, StereoMode, Lvals.lvMidPos, @Header.hVgrads);
+  Lvals.bNoColIpol := (HLight.Lights[3].FreeByte and 1) <> 0;
+  Lvals.bCalcPixColSqr := (HLight.AdditionalOptions and 1) <> 0;
+  Lvals.bColCycling := (HLight.TBoptions and $4000) <> 0;
+  Lvals.bFarFog := (HLight.TBoptions and $40000) <> 0;
+  Lvals.bAmbRelObj := (HLight.TBoptions and $20000000) <> 0;
+  Lvals.bDFogOptions := HLight.Lights[0].FreeByte and 3;
+  if Lvals.bDFogOptions = 3 then Lvals.bDFogOptions := 1;
+  Lvals.bVolLight := (Header.bVolLightNr and 7) <> 0;
+  Lvals.sDepth := HLight.TBpos[4] * 0.8e-6;
+  Lvals.sDiffuseShadowing := HLight.Lights[3].AdditionalByteEx / 256;
+  Lvals.sAmbShad := (HLight.TBpos[11] and $FF) / 53;
+  Lvals.sRoughnessFactor := HLight.RoughnessFactor * Sqr(s1d255);
+  Lvals.sStepWidth := Header.dStepWidth;
+  Lvals.sZZstmitDif := Header.dZstart - Header.dZmid;
+  Lvals.sDiff := HLight.TBpos[5] * 0.02;
+  Lvals.sSpec := Max(0.004, (HLight.TBpos[7] and $FFF) * 0.02);
+  Lvals.iExModes := HLight.Lights[2].FreeByte;
+  Lvals.sIndLightReflect := Sqr((ShortInt((HLight.TBpos[11] shr 8) and
+    $FF) + 53) * 0.022);
+  if Lvals.bCalcPixColSqr then
+  begin
+    Lvals.sDiff := (Sqr(Lvals.sDiff) + Lvals.sDiff) * 0.5;
+    Lvals.sSpec := (Sqr(Lvals.sSpec) + Lvals.sSpec) * 0.5;
+    Lvals.sIndLightReflect := Lvals.sIndLightReflect * 0.5;
+    LightScale := 1.5;
+  end
+  else LightScale := 1;
+
+  if Lvals.bVolLight then
+  begin
+    Lvals.sDynFogMul := 0.0005;
+    DTemp := 50;
+    Temp := 128;
+    Lvals.sShadGr := (HLight.TBpos[6] - 53) * 0.00002;
+  end
+  else
+  begin
+    Lvals.sShadGr := (HLight.TBpos[6] - 53) * ImScale *
+      Header.mZstepDiv * 0.00065;
+    DTemp := 2.2 / Header.mZstepDiv;
+    Lvals.sDynFogMul := Header.mZstepDiv * 0.015;
+    if Header.bDFogIt > 0 then
+    begin
+      Temp := 128;
+      DTemp := DTemp * 0.25;
+      Lvals.sShadGr := Lvals.sShadGr * 4;
+      Lvals.sDynFogMul := Lvals.sDynFogMul * 4;
+    end
+    else Temp := 137;
+  end;
+  Lvals.sShad := (Temp - Sqrt(HLight.TBpos[3] and $FFFF) * 11.313708) *
+    DTemp * 0.28;
+  Lvals.sShadZmul := DTemp * 0.7 / (Header.dZend - Header.dZstart) *
+    (128 - Sqrt(HLight.TBpos[3] shr 16) * 11.313708);
+  CalcSCstartAndSCmul(Header, Lvals.sCStart, Lvals.sCmul, False);
+  CalcSCstartAndSCmul(Header, Lvals.sCiStart, Lvals.sCimul, True);
+
+  AmbientScale := (HLight.TBpos[8] and $FFF) / 90;
+  if Lvals.bCalcPixColSqr then
+  begin
+    Lvals.PLValigned.sDynFogCol[0] := Sqr(HLight.DynFogR) * s1d255;
+    Lvals.PLValigned.sDynFogCol[1] := Sqr(HLight.DynFogG) * s1d255;
+    Lvals.PLValigned.sDynFogCol[2] := Sqr(HLight.DynFogB) * s1d255;
+    Lvals.PLValigned.sDynFogCol2 := RGBColToSVecNoScaleSQR(HLight.DynFogCol2);
+    Lvals.PLValigned.sDepthCol := RGBColToSVecNoScaleSQR(HLight.DepthCol);
+    Lvals.PLValigned.sDepthCol2 := RGBColToSVecNoScaleSQR(HLight.DepthCol2);
+    AmbientScale := (Sqr(AmbientScale) + AmbientScale) * 0.5 * LightScale;
+    Lvals.PLValigned.sAmbCol := ScaleSVector(
+      RGBColToSVecNoScaleSQR(HLight.AmbCol), AmbientScale);
+    Lvals.PLValigned.sAmbCol2 := ScaleSVector(
+      RGBColToSVecNoScaleSQR(HLight.AmbCol2), AmbientScale);
+  end
+  else
+  begin
+    Lvals.PLValigned.sDynFogCol[0] := HLight.DynFogR;
+    Lvals.PLValigned.sDynFogCol[1] := HLight.DynFogG;
+    Lvals.PLValigned.sDynFogCol[2] := HLight.DynFogB;
+    Lvals.PLValigned.sDynFogCol2 := RGBColToSVecNoScale(HLight.DynFogCol2);
+    Lvals.PLValigned.sDepthCol := RGBColToSVecNoScale(HLight.DepthCol);
+    Lvals.PLValigned.sDepthCol2 := RGBColToSVecNoScale(HLight.DepthCol2);
+    Lvals.PLValigned.sAmbCol := ScaleSVector(
+      RGBColToSVecNoScale(HLight.AmbCol), AmbientScale);
+    Lvals.PLValigned.sAmbCol2 := ScaleSVector(
+      RGBColToSVecNoScale(HLight.AmbCol2), AmbientScale);
+  end;
+
+  CameraMatrix := NormaliseMatrixTo(1, @Header.hVGrads);
+  for I := 0 to 5 do
+  begin
+    Lvals.SortTab[I] := I;
+    Lvals.iLightOption[I] := HLight.Lights[I].Loption and 3;
+    if Lvals.iLightOption[I] = 3 then Lvals.iLightOption[I] := 1;
+    Lvals.iLightPos[I] := ((HLight.Lights[I].Loption shr 2) and 7) or
+      ((HLight.Lights[I].LFunction and 128) shr 4);
+    if Lvals.iLightOption[I] <> 0 then Lvals.iLightPos[I] := 0;
+    Lvals.iLightAbs[I] := (HLight.Lights[I].Loption shr 5) and 1;
+    Lvals.iLightPowFunc[I] := 2 shl (HLight.Lights[I].LFunction and 7);
+    Lvals.iLightFuncDiff[I] := (HLight.Lights[I].LFunction shr 4) and 3;
+    Lvals.iHSenabled[I] := 1 - ((HLight.Lights[I].Loption shr 6) and 1);
+    Lvals.iHScalced[I] := Lvals.iHSenabled[I] and
+      (Header.bHScalculated shr (I + 2));
+    Lvals.iHSmask[I] := $400 shl I;
+    Lamp := ShortFloatToSingle(@HLight.Lights[I].Lamp);
+    if Lvals.bCalcPixColSqr then
+      Lvals.PLValigned.sLCols[I] := RGBColToSVecNoScaleSQR(
+        HLight.Lights[I].Lcolor)
+    else
+      Lvals.PLValigned.sLCols[I] := RGBColToSVecNoScale(
+        HLight.Lights[I].Lcolor);
+    ScaleSVectorV(@Lvals.PLValigned.sLCols[I], LightScale);
+    if (Lvals.iLightPos[I] and 1) <> 0 then
+    begin
+      ScaleSVectorV(@Lvals.PLValigned.sLCols[I], Lamp * 1.3);
+      Lvals.PLValigned.LN[I] := DVecToSVec(SubtractVectors(
+        DVecFromLightPos(HLight.Lights[I]), @Lvals.lvMidPos));
+      Lvals.sLmaxL[I] := 800 * (Lvals.PLValigned.sLCols[I][0] +
+        Lvals.PLValigned.sLCols[I][1] + Lvals.PLValigned.sLCols[I][2] +
+        128 * Lamp);
+    end
+    else
+    begin
+      AngleX := -D7BtoDouble(HLight.Lights[I].LXpos);
+      AngleY := D7BtoDouble(HLight.Lights[I].LYpos);
+      BuildViewVectorFOV(AngleY, AngleX, @Lvals.PLValigned.LN[I]);
+      SVectorChangeSign(@Lvals.PLValigned.LN[I]);
+      if Lvals.iLightAbs[I] <> 0 then
+      begin
+        RotateSVectorReverse(@Lvals.PLValigned.LN[I], @CameraMatrix);
+        NormaliseSVectorVar(Lvals.PLValigned.LN[I]);
+      end;
+      ScaleSVectorV(@Lvals.PLValigned.sLCols[I], Lamp);
+    end;
+  end;
 end;
 
 procedure MakeLightValsFromHeaderLightNavi(Header: TPMandHeader10;

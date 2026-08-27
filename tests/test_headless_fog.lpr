@@ -3,7 +3,8 @@ program TestHeadlessFog;
 {$IFDEF FPC}{$MODE Delphi}{$H+}{$ENDIF}
 
 uses
-  SysUtils, TypeDefinitions, MB3DPortablePNG, MB3DHeadlessShading;
+  SysUtils, TypeDefinitions, HeaderTrafos, MB3DPortablePNG,
+  MB3DHeadlessShading;
 
 procedure Fail(const MessageText: string);
 begin
@@ -29,6 +30,24 @@ begin
   Header.dZstart := 0;
   Header.dZend := 10;
   Header.dZmid := 0;
+  Header.mZstepDiv := 1;
+  Header.hVGrads[0, 0] := 1;
+  Header.hVGrads[1, 1] := 1;
+  Header.hVGrads[2, 2] := 1;
+  Header.Light.TBpos[4] := 125;
+  Header.Light.TBpos[6] := 54;
+  Header.Light.DynFogR := 200;
+  Header.Light.DynFogG := 20;
+  Header.Light.DynFogB := 30;
+  MakeLightValsFromHeaderLight(@Header, @LightVals, 1, 0);
+  if Abs(LightVals.sDepth - 0.0001) > 0.0000001 then
+    Fail('saved depth-fog amount was not converted');
+  if Abs(LightVals.sShadGr - 0.00065) > 0.0000001 then
+    Fail('saved dynamic-fog amplitude was not converted');
+  if Abs(LightVals.PLValigned.sDynFogCol[0] - 200) > 0.001 then
+    Fail('saved dynamic-fog color was not converted');
+
+  FillChar(LightVals, SizeOf(LightVals), 0);
   Header.Light.TBoptions := Cardinal(32) shl 23;
   Header.Light.DepthCol[0] := 10;
   Header.Light.DepthCol[1] := 10;
