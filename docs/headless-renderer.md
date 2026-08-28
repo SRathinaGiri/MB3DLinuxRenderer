@@ -76,6 +76,8 @@ python3 scripts/compare-renders.py windows-reference.png linux-render.png
 The report includes changed-pixel percentage, mean absolute channel error,
 RMSE, and maximum channel error. Optional `--max-mae` and
 `--max-channel-error` limits make the command suitable for regression tests.
+For multi-frame or multi-scene tracking, use `scripts/run-parity-suite.py`
+with a local manifest as described in `docs/parity-suite.md`.
 
 The executable has no GUI/display dependency. For a relocatable distribution
 that does not require `libc6:i386` to be installed on the target, build the

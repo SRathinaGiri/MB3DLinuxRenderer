@@ -15,6 +15,7 @@ dist/*.sha256
 
 # Editor and OS metadata
 *.local
+__pycache__/
 *.identcache
 *~
 .DS_Store
