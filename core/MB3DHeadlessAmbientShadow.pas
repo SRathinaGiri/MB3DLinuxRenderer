@@ -269,7 +269,7 @@ var X, Y, Direction, RadiusIndex, SampleIndex, NeighbourIndex: Integer;
     DirectionOcclusion, Occlusion, TotalOcclusion, Distance,
     DepthScale, Threshold: Single;
 begin
-  if ((Header.bCalcAmbShadowAutomatic shr 1) and 7) = 4 then
+  if (Header.bCalcAmbShadowAutomatic and 12) in [4, 8] then
   begin
     Result := ApplyRadial24AmbientShadow(Header, Samples, ShadowedPixels,
       MeanOcclusion);

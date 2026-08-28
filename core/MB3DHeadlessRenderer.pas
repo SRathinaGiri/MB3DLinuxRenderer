@@ -30,6 +30,7 @@ var LightVals: TLightVals;
     DESteps: Int64;
     MeanOcclusion, MeanDepthFog, MeanDynamicFog: Single;
     Options: TMB3DRenderOptions;
+    PreviousHScalculated: Integer;
 begin
   Result := False;
   ErrorText := '';
@@ -49,6 +50,7 @@ begin
   FillChar(Samples[0], Length(Samples) * SizeOf(TsiLight5), 0);
   Rect := Types.Rect(0, 0, Header.Width - 1, Header.Height - 1);
   MakeLightValsFromHeaderLight(@Header, @LightVals, 1, StereoMode);
+  PreviousHScalculated := Header.bHScalculated;
   Options := MakeMB3DRenderOptions(ThreadCount, tpNormal);
   Options.CalculateHardShadows := CalculateHardShadows;
   if not CalcMandT(@Header, @LightVals, @Stats, @Samples[0],
@@ -63,6 +65,16 @@ begin
   begin
     ErrorText := 'Rendering was cancelled';
     Exit;
+  end;
+  if CalculateHardShadows then
+  begin
+    if (Header.bCalc1HSsoft and 1) <> 0 then
+      Header.bHScalculated := (PreviousHScalculated and 1) or
+        Header.bCalculateHardShadow
+    else
+      Header.bHScalculated := (PreviousHScalculated and $FD) or
+        Header.bCalculateHardShadow;
+    MakeLightValsFromHeaderLight(@Header, @LightVals, 1, StereoMode);
   end;
   HitCount := 0;
   HardShadowedPixels := 0;
@@ -82,7 +94,7 @@ begin
       if CalculateHardShadows and (Samples[Index].SIgradient < 32768) then
         for LightIndex := 0 to 5 do
           if ((Header.bCalculateHardShadow and (4 shl LightIndex)) <> 0) and
-            ((Samples[Index].Shadow and ($400 shl LightIndex)) = 0) then
+            ((Samples[Index].Shadow and ($400 shl LightIndex)) <> 0) then
           begin
             Inc(HardShadowedPixels);
             Break;
@@ -105,7 +117,7 @@ begin
   begin
     if ApplyHeadlessAmbientShadow(Header, Samples, ShadowedPixels,
       MeanOcclusion) then
-      if ((Header.bCalcAmbShadowAutomatic shr 1) and 7) = 4 then
+      if (Header.bCalcAmbShadowAutomatic and 12) in [4, 8] then
         WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"mb3d-24bit-radial",',
           '"passes":', Max(1, Header.SSAORcount), ',"shadowedPixels":',
           ShadowedPixels, ',"meanOcclusion":',
