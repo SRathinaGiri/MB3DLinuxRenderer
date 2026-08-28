@@ -122,7 +122,7 @@ begin
     FOVY := Header.dFOVy * Pid180;
     Aspect := Header.Width / Header.Height;
   end;
-  CX := (CalcXoff(@Header) - X / Header.Width) * FOVY * Aspect;
+  CX := (CalcXoff(@Header) - (X + 1) / Header.Width) * FOVY * Aspect;
   CY := (Y / Header.Height - 0.5) * FOVY;
   if (Header.bPlanarOptic and 3) = 1 then
   begin
@@ -298,7 +298,7 @@ function DepthColor(const Header: TMandHeader10; Y: Integer): TFloatRGB;
 var Position: Single;
     FunctionIndex: Integer;
 begin
-  if Header.Height > 1 then Position := Y / (Header.Height - 1)
+  if Header.Height > 0 then Position := Y / Header.Height
   else Position := 0.5;
   FunctionIndex := Header.Light.TBoptions shr 30;
   if FunctionIndex = 1 then Position := Sqr(Position)
