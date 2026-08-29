@@ -43,4 +43,7 @@ The manifest supports per-case thresholds:
 - `maxChannelError`
 - `minCompletionPercent`
 
+Each case can also set `ambient` to `auto`, `classic24`, `radial24`, or `off`.
+Omitting it uses the worker default, `auto`.
+
 Keep machine-specific manifests as `*.local`; they are ignored by git.

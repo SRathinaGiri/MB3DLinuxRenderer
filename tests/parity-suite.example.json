@@ -9,6 +9,7 @@
       "output": "fractal20260325-frame-0080-linux.png",
       "stereo": "off",
       "shadows": "off",
+      "ambient": "auto",
       "threads": 4,
       "minCompletionPercent": 94.0,
       "maxMae": 15.0

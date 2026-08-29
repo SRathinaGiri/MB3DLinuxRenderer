@@ -4,19 +4,21 @@ unit MB3DHeadlessRenderer;
 
 interface
 
-uses TypeDefinitions;
+uses TypeDefinitions, MB3DHeadlessAmbientShadow;
 
 function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
   ThreadCount: Integer; CalculateHardShadows: Boolean;
+  AmbientMode: THeadlessAmbientMode;
   const OutputFile: string; out ErrorText: string): Boolean;
 
 implementation
 
 uses Classes, SysUtils, Types, Math, Calc, HeaderTrafos, MB3DPortablePNG,
-  MB3DHeadlessShading, MB3DHeadlessAmbientShadow;
+  MB3DHeadlessShading;
 
 function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
   ThreadCount: Integer; CalculateHardShadows: Boolean;
+  AmbientMode: THeadlessAmbientMode;
   const OutputFile: string; out ErrorText: string): Boolean;
 var LightVals: TLightVals;
     Stats: TCalcThreadStats;
@@ -31,6 +33,7 @@ var LightVals: TLightVals;
     MeanOcclusion, MeanDepthFog, MeanDynamicFog: Single;
     Options: TMB3DRenderOptions;
     PreviousHScalculated: Integer;
+    AppliedAmbientMode: string;
 begin
   Result := False;
   ErrorText := '';
@@ -116,14 +119,16 @@ begin
   if (Header.bCalcAmbShadowAutomatic and 1) <> 0 then
   begin
     if ApplyHeadlessAmbientShadow(Header, Samples, ShadowedPixels,
-      MeanOcclusion) then
-      if (Header.bCalcAmbShadowAutomatic and 12) in [4, 8] then
-        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"mb3d-24bit-radial",',
+      MeanOcclusion, AmbientMode, AppliedAmbientMode) then
+      if Pos('24bit', AppliedAmbientMode) > 0 then
+        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"',
+          AppliedAmbientMode, '",',
           '"passes":', Max(1, Header.SSAORcount), ',"shadowedPixels":',
           ShadowedPixels, ',"meanOcclusion":',
           FormatFloat('0.######', MeanOcclusion), '}')
       else
-        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"portable-horizon",',
+        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"',
+        AppliedAmbientMode, '",',
         '"shadowedPixels":', ShadowedPixels, ',"meanOcclusion":',
         FormatFloat('0.######', MeanOcclusion), '}');
   end

@@ -2,7 +2,7 @@
 
 The i386 worker now loads native `.m3a` animation frames, executes external
 `.m3f` formula code, ray-marches geometry, applies saved palettes, directional
-lights, MB3D's 24-bit radial ambient shadow, gamma, depth/dynamic fog, and
+lights, MB3D's 24-bit ambient shadow, gamma, depth/dynamic fog, and
 optional formula-ray hard shadows, and writes RGB PNG files without Lazarus
 LCL or a display server.
 
@@ -22,7 +22,8 @@ Fast mono preview using the saved camera and scene parameters:
   --threads 4 \
   --assets assets \
   --size 640x640 \
-  --shadows off
+  --shadows off \
+  --ambient auto
 ```
 
 Final stereo render at the dimensions stored in the M3A:
@@ -35,7 +36,8 @@ Final stereo render at the dimensions stored in the M3A:
   --threads 4 \
   --assets assets \
   --stereo on \
-  --shadows on
+  --shadows on \
+  --ambient auto
 ```
 
 Stereo writes `frame-000000-L.png` and `frame-000000-R.png`. The worker uses
@@ -47,11 +49,17 @@ slower on dense IFS scenes. Shadow rays use a minimum forward step and a 4,096
 step safety ceiling so malformed or near-zero distance estimates cannot make
 a worker run forever. Use `--shadows off` for previews.
 
+`--ambient auto` is the default. For MB3D SSAO24 scenes, `auto` keeps the
+stable radial 24-bit path that currently gives the closest frame-80 Windows
+parity score. Use `--ambient classic24` to force the source-ported Windows
+SSAO24 scan, `--ambient radial24` to force the deterministic radial 24-bit
+path, or `--ambient off` for diagnostics.
+
 Current fidelity limits:
 
-- randomized 24-bit radial SSAO (MB3D ambient-shadow mode 4) uses the original
-  32-direction multiscale kernel and `SSAORcount` accumulation. The headless
-  worker uses a stable random phase so repeated renders are reproducible;
+- MB3D SSAO24 has both a source-ported classic scan and a deterministic
+  radial 24-bit scan. The radial path uses a stable random phase so repeated
+  renders are reproducible;
 - the other legacy ambient-shadow modes still use the portable horizon pass;
 - enabled global directional lights are supported; positional lights and
   light-map lights are reported as unsupported in the shading event;

@@ -70,6 +70,8 @@ def render_case(case, manifest_dir, worker, default_assets, out_dir, dry_run):
         str(case.get("stereo", "off")),
         "--shadows",
         str(case.get("shadows", "off")),
+        "--ambient",
+        str(case.get("ambient", "auto")),
     ]
     assets = case.get("assets", default_assets)
     if assets:
