@@ -59,6 +59,7 @@ def render_case(case, manifest_dir, worker, default_assets, out_dir, dry_run):
     output = path_from_case(case.get("output", f"{name}.png"), out_dir)
     output.parent.mkdir(parents=True, exist_ok=True)
     hard_shadow = case.get("hardShadow")
+    reflection = case.get("reflection", "report")
     command = [
         str(worker),
         "--animation",
@@ -71,6 +72,8 @@ def render_case(case, manifest_dir, worker, default_assets, out_dir, dry_run):
         str(case.get("stereo", "off")),
         "--ambient",
         str(case.get("ambient", "auto")),
+        "--reflection",
+        str(reflection),
     ]
     if hard_shadow:
         command.extend(["--hard-shadow", str(hard_shadow)])

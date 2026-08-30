@@ -7,7 +7,8 @@ uses
   SysUtils, Math, TypeDefinitions, MB3DAnimationModel, MB3DAnimationHeaderAdapter,
   MB3DResourceBundle, MB3DCompiledFormulaCode, MB3DAnimationHeaderInterpolation,
   MB3DAnimationHeaderAddonInterpolation, MB3DOutputPlan,
-  MB3DHeadlessCustomFormulas, MB3DHeadlessRenderer, MB3DHeadlessAmbientShadow;
+  MB3DHeadlessCustomFormulas, MB3DHeadlessRenderer, MB3DHeadlessAmbientShadow,
+  MB3DHeadlessReflection;
 
 const
   ExitSuccess = 0;
@@ -29,11 +30,12 @@ type
     OutputHeight: Integer;
     HardShadowMode: THeadlessHardShadowMode;
     AmbientMode: THeadlessAmbientMode;
+    ReflectionMode: THeadlessReflectionMode;
   end;
 
 procedure PrintUsage;
 begin
-  WriteLn('Usage: mb3d-worker --animation PATH --frame N --output PATH [--threads N] [--assets PATH] [--stereo on|off] [--size WIDTHxHEIGHT] [--shadows on|off] [--hard-shadow inline|post|off] [--ambient auto|classic24|radial24|off]');
+  WriteLn('Usage: mb3d-worker --animation PATH --frame N --output PATH [--threads N] [--assets PATH] [--stereo on|off] [--size WIDTHxHEIGHT] [--shadows on|off] [--hard-shadow inline|post|off] [--ambient auto|classic24|radial24|off] [--reflection report|post|off]');
   WriteLn('       mb3d-worker --help | --version');
 end;
 
@@ -64,6 +66,16 @@ begin
     hhsmPost: Result := 'post';
   else
     Result := 'off';
+  end;
+end;
+
+function ReflectionModeName(const ReflectionMode: THeadlessReflectionMode): string;
+begin
+  case ReflectionMode of
+    hrmOff: Result := 'off';
+    hrmPost: Result := 'post';
+  else
+    Result := 'report';
   end;
 end;
 
@@ -158,6 +170,7 @@ begin
   Request.StereoRequest := srOff;
   Request.HardShadowMode := hhsmInline;
   Request.AmbientMode := hamAuto;
+  Request.ReflectionMode := hrmReport;
   Index := 1;
   while Index <= ParamCount do
   begin
@@ -232,6 +245,19 @@ begin
       begin
         WriteLn(StdErr, 'Invalid value for --ambient: ', TextValue,
           ' (expected auto, classic24, radial24, or off)');
+        Exit(ExitInvalidArguments);
+      end;
+    end
+    else if Argument = '--reflection' then
+    begin
+      if not RequireValue(Argument, Index, TextValue) then Exit(ExitInvalidArguments);
+      if SameText(TextValue, 'report') then Request.ReflectionMode := hrmReport
+      else if SameText(TextValue, 'post') then Request.ReflectionMode := hrmPost
+      else if SameText(TextValue, 'off') then Request.ReflectionMode := hrmOff
+      else
+      begin
+        WriteLn(StdErr, 'Invalid value for --reflection: ', TextValue,
+          ' (expected report, post, or off)');
         Exit(ExitInvalidArguments);
       end;
     end
@@ -412,7 +438,8 @@ begin
           ',"leftMode":4,"rightMode":3}');
         WriteLn('MB3D_EVENT {"type":"render-options","hardShadow":"',
           HardShadowModeName(Request.HardShadowMode),
-          '","ambient":"', AmbientModeName(Request.AmbientMode), '"}');
+          '","ambient":"', AmbientModeName(Request.AmbientMode),
+          '","reflection":"', ReflectionModeName(Request.ReflectionMode), '"}');
         if OutputPlan.Stereo then
           WriteLn('MB3D_EVENT {"type":"outputs","left":"', JsonString(OutputPlan.LeftFile),
             '","right":"', JsonString(OutputPlan.RightFile), '"}')
@@ -425,6 +452,7 @@ begin
         begin
           if not RenderMB3DFrame(RenderHeader, 4, Request.ThreadCount,
             Request.HardShadowMode, Request.AmbientMode,
+            Request.ReflectionMode,
             OutputPlan.LeftFile, ErrorText) then
           begin
             WriteLn(StdErr, 'Left-eye render failed: ', ErrorText);
@@ -437,6 +465,7 @@ begin
             RenderHeader := Header;
             if not RenderMB3DFrame(RenderHeader, 3, Request.ThreadCount,
               Request.HardShadowMode, Request.AmbientMode,
+              Request.ReflectionMode,
               OutputPlan.RightFile, ErrorText) then
             begin
               WriteLn(StdErr, 'Right-eye render failed: ', ErrorText);
@@ -451,7 +480,7 @@ begin
           end;
         end
         else if not RenderMB3DFrame(RenderHeader, 0, Request.ThreadCount,
-          Request.HardShadowMode, Request.AmbientMode,
+          Request.HardShadowMode, Request.AmbientMode, Request.ReflectionMode,
           OutputPlan.MonoFile, ErrorText) then
         begin
           WriteLn(StdErr, 'Render failed: ', ErrorText);

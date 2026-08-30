@@ -4,14 +4,14 @@ unit MB3DHeadlessRenderer;
 
 interface
 
-uses TypeDefinitions, MB3DHeadlessAmbientShadow;
+uses TypeDefinitions, MB3DHeadlessAmbientShadow, MB3DHeadlessReflection;
 
 type
   THeadlessHardShadowMode = (hhsmOff, hhsmInline, hhsmPost);
 
 function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
   ThreadCount: Integer; HardShadowMode: THeadlessHardShadowMode;
-  AmbientMode: THeadlessAmbientMode;
+  AmbientMode: THeadlessAmbientMode; ReflectionMode: THeadlessReflectionMode;
   const OutputFile: string; out ErrorText: string): Boolean;
 
 implementation
@@ -21,7 +21,7 @@ uses Classes, SysUtils, Types, Math, Calc, HeaderTrafos, MB3DPortablePNG,
 
 function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
   ThreadCount: Integer; HardShadowMode: THeadlessHardShadowMode;
-  AmbientMode: THeadlessAmbientMode;
+  AmbientMode: THeadlessAmbientMode; ReflectionMode: THeadlessReflectionMode;
   const OutputFile: string; out ErrorText: string): Boolean;
 var LightVals: TLightVals;
     Stats: TCalcThreadStats;
@@ -36,7 +36,29 @@ var LightVals: TLightVals;
     MeanOcclusion, MeanDepthFog, MeanDynamicFog: Single;
     Options: TMB3DRenderOptions;
     PreviousHScalculated: Integer;
-    AppliedAmbientMode: string;
+    AppliedAmbientMode, AppliedReflectionMode: string;
+    ReflectionStatus: THeadlessReflectionStatus;
+  procedure WriteReflectionEvent;
+  begin
+    WriteLn('MB3D_EVENT {"type":"reflection","mode":"',
+      AppliedReflectionMode, '","savedEnabled":',
+      LowerCase(BoolToStr(ReflectionStatus.SavedEnabled, True)),
+      ',"active":', LowerCase(BoolToStr(ReflectionStatus.Active, True)),
+      ',"amount":', FormatFloat('0.######', ReflectionStatus.Amount),
+      ',"count":', ReflectionStatus.ReflectionCount,
+      ',"transmission":',
+      LowerCase(BoolToStr(ReflectionStatus.TransmissionEnabled, True)),
+      ',"onlyDIFS":',
+      LowerCase(BoolToStr(ReflectionStatus.TransmissionOnlyDIFS, True)),
+      ',"transmissionIndex":',
+      FormatFloat('0.######', ReflectionStatus.TransmissionIndex),
+      ',"absorption":',
+      FormatFloat('0.######', ReflectionStatus.TransmissionAbsorption),
+      ',"scattering":',
+      FormatFloat('0.######', ReflectionStatus.TransmissionScattering),
+      ',"diffuseReflects":', ReflectionStatus.DiffuseReflects,
+      ',"insideOptions":', ReflectionStatus.InsideOptions, '}');
+  end;
 begin
   Result := False;
   ErrorText := '';
@@ -166,6 +188,13 @@ begin
     DynamicFoggedPixels, ',"meanDynamic":',
     FormatFloat('0.######', MeanDynamicFog), ',"dynamicIterations":',
     Header.bDFogIt, '}');
+  if not ApplyHeadlessReflection(Header, ReflectionMode, ReflectionStatus,
+    AppliedReflectionMode, ErrorText) then
+  begin
+    WriteReflectionEvent;
+    Exit;
+  end;
+  WriteReflectionEvent;
   Result := SaveRGB8PNG(OutputFile, Header.Width, Header.Height, Pixels, ErrorText);
 end;
 

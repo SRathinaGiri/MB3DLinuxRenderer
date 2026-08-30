@@ -23,7 +23,8 @@ Fast mono preview using the saved camera and scene parameters:
   --assets assets \
   --size 640x640 \
   --shadows off \
-  --ambient auto
+  --ambient auto \
+  --reflection report
 ```
 
 Final stereo render at the dimensions stored in the M3A:
@@ -37,7 +38,8 @@ Final stereo render at the dimensions stored in the M3A:
   --assets assets \
   --stereo on \
   --hard-shadow post \
-  --ambient auto
+  --ambient auto \
+  --reflection report
 ```
 
 Stereo writes `frame-000000-L.png` and `frame-000000-R.png`. The worker uses
@@ -58,6 +60,14 @@ parity score. Use `--ambient classic24` to force the source-ported Windows
 SSAO24 scan, `--ambient radial24` to force the deterministic radial 24-bit
 path, or `--ambient off` for diagnostics.
 
+`--reflection report` is the default and reports the saved MB3D
+specular-reflection/transmission settings without changing pixels. This keeps
+current parity renders reproducible while making reflection omissions visible
+in the event log. `--reflection off` suppresses that post step explicitly.
+`--reflection post` is reserved for the Windows `CalcSR` recursive post pass
+and currently fails with a clear unsupported-feature error when a scene has
+active saved reflections.
+
 Current fidelity limits:
 
 - MB3D SSAO24 has both a source-ported classic scan and a deterministic
@@ -68,8 +78,10 @@ Current fidelity limits:
   light-map lights are reported as unsupported in the shading event;
 - saved depth fog and two-color dynamic fog are supported; visible volumetric
   light shapes still need parity validation;
-- specular reflection, background maps, transparency, and the remaining GUI
-  post-process chain still need GUI-free ports.
+- specular reflection/transmission is detected and reported, but the recursive
+  Windows `CalcSR` post pass still needs a GUI-free port;
+- background maps, transparency, and the remaining GUI post-process chain still
+  need GUI-free ports.
 
 Run the portable rendering regression tests with:
 
