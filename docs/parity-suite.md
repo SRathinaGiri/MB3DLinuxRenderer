@@ -46,4 +46,8 @@ The manifest supports per-case thresholds:
 Each case can also set `ambient` to `auto`, `classic24`, `radial24`, or `off`.
 Omitting it uses the worker default, `auto`.
 
+Use `hardShadow` with `inline`, `post`, or `off` to select the hard-shadow
+path directly. If `hardShadow` is omitted, the older `shadows` field is still
+passed as `--shadows on|off`.
+
 Keep machine-specific manifests as `*.local`; they are ignored by git.

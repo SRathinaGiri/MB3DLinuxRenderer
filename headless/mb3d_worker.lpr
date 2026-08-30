@@ -27,13 +27,13 @@ type
     StereoRequest: TMB3DStereoRequest;
     OutputWidth: Integer;
     OutputHeight: Integer;
-    CalculateHardShadows: Boolean;
+    HardShadowMode: THeadlessHardShadowMode;
     AmbientMode: THeadlessAmbientMode;
   end;
 
 procedure PrintUsage;
 begin
-  WriteLn('Usage: mb3d-worker --animation PATH --frame N --output PATH [--threads N] [--assets PATH] [--stereo on|off] [--size WIDTHxHEIGHT] [--shadows on|off] [--ambient auto|classic24|radial24|off]');
+  WriteLn('Usage: mb3d-worker --animation PATH --frame N --output PATH [--threads N] [--assets PATH] [--stereo on|off] [--size WIDTHxHEIGHT] [--shadows on|off] [--hard-shadow inline|post|off] [--ambient auto|classic24|radial24|off]');
   WriteLn('       mb3d-worker --help | --version');
 end;
 
@@ -54,6 +54,16 @@ begin
     hamOff: Result := 'off';
   else
     Result := 'auto';
+  end;
+end;
+
+function HardShadowModeName(const HardShadowMode: THeadlessHardShadowMode): string;
+begin
+  case HardShadowMode of
+    hhsmInline: Result := 'inline';
+    hhsmPost: Result := 'post';
+  else
+    Result := 'off';
   end;
 end;
 
@@ -146,7 +156,7 @@ begin
   Request.ThreadCount := 1;
   Request.AssetsDirectory := 'assets';
   Request.StereoRequest := srOff;
-  Request.CalculateHardShadows := True;
+  Request.HardShadowMode := hhsmInline;
   Request.AmbientMode := hamAuto;
   Index := 1;
   while Index <= ParamCount do
@@ -189,12 +199,25 @@ begin
     else if Argument = '--shadows' then
     begin
       if not RequireValue(Argument, Index, TextValue) then Exit(ExitInvalidArguments);
-      if SameText(TextValue, 'on') then Request.CalculateHardShadows := True
-      else if SameText(TextValue, 'off') then Request.CalculateHardShadows := False
+      if SameText(TextValue, 'on') then Request.HardShadowMode := hhsmInline
+      else if SameText(TextValue, 'off') then Request.HardShadowMode := hhsmOff
       else
       begin
         WriteLn(StdErr, 'Invalid value for --shadows: ', TextValue,
           ' (expected on or off)');
+        Exit(ExitInvalidArguments);
+      end;
+    end
+    else if Argument = '--hard-shadow' then
+    begin
+      if not RequireValue(Argument, Index, TextValue) then Exit(ExitInvalidArguments);
+      if SameText(TextValue, 'inline') then Request.HardShadowMode := hhsmInline
+      else if SameText(TextValue, 'post') then Request.HardShadowMode := hhsmPost
+      else if SameText(TextValue, 'off') then Request.HardShadowMode := hhsmOff
+      else
+      begin
+        WriteLn(StdErr, 'Invalid value for --hard-shadow: ', TextValue,
+          ' (expected inline, post, or off)');
         Exit(ExitInvalidArguments);
       end;
     end
@@ -387,9 +410,9 @@ begin
           StereoRequestName(Request.StereoRequest), '","savedHeaderMode":',
           Header.bStereoMode, ',"enabled":', LowerCase(BoolToStr(StereoEnabled, True)),
           ',"leftMode":4,"rightMode":3}');
-        WriteLn('MB3D_EVENT {"type":"render-options","hardShadows":',
-          LowerCase(BoolToStr(Request.CalculateHardShadows, True)),
-          ',"ambient":"', AmbientModeName(Request.AmbientMode), '"}');
+        WriteLn('MB3D_EVENT {"type":"render-options","hardShadow":"',
+          HardShadowModeName(Request.HardShadowMode),
+          '","ambient":"', AmbientModeName(Request.AmbientMode), '"}');
         if OutputPlan.Stereo then
           WriteLn('MB3D_EVENT {"type":"outputs","left":"', JsonString(OutputPlan.LeftFile),
             '","right":"', JsonString(OutputPlan.RightFile), '"}')
@@ -401,7 +424,7 @@ begin
         if OutputPlan.Stereo then
         begin
           if not RenderMB3DFrame(RenderHeader, 4, Request.ThreadCount,
-            Request.CalculateHardShadows, Request.AmbientMode,
+            Request.HardShadowMode, Request.AmbientMode,
             OutputPlan.LeftFile, ErrorText) then
           begin
             WriteLn(StdErr, 'Left-eye render failed: ', ErrorText);
@@ -413,7 +436,7 @@ begin
               JsonString(OutputPlan.LeftFile), '"}');
             RenderHeader := Header;
             if not RenderMB3DFrame(RenderHeader, 3, Request.ThreadCount,
-              Request.CalculateHardShadows, Request.AmbientMode,
+              Request.HardShadowMode, Request.AmbientMode,
               OutputPlan.RightFile, ErrorText) then
             begin
               WriteLn(StdErr, 'Right-eye render failed: ', ErrorText);
@@ -428,7 +451,7 @@ begin
           end;
         end
         else if not RenderMB3DFrame(RenderHeader, 0, Request.ThreadCount,
-          Request.CalculateHardShadows, Request.AmbientMode,
+          Request.HardShadowMode, Request.AmbientMode,
           OutputPlan.MonoFile, ErrorText) then
         begin
           WriteLn(StdErr, 'Render failed: ', ErrorText);

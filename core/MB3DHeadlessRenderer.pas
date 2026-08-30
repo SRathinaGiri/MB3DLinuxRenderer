@@ -6,18 +6,21 @@ interface
 
 uses TypeDefinitions, MB3DHeadlessAmbientShadow;
 
+type
+  THeadlessHardShadowMode = (hhsmOff, hhsmInline, hhsmPost);
+
 function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
-  ThreadCount: Integer; CalculateHardShadows: Boolean;
+  ThreadCount: Integer; HardShadowMode: THeadlessHardShadowMode;
   AmbientMode: THeadlessAmbientMode;
   const OutputFile: string; out ErrorText: string): Boolean;
 
 implementation
 
 uses Classes, SysUtils, Types, Math, Calc, HeaderTrafos, MB3DPortablePNG,
-  MB3DHeadlessShading;
+  MB3DHeadlessShading, MB3DHeadlessHardShadow;
 
 function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
-  ThreadCount: Integer; CalculateHardShadows: Boolean;
+  ThreadCount: Integer; HardShadowMode: THeadlessHardShadowMode;
   AmbientMode: THeadlessAmbientMode;
   const OutputFile: string; out ErrorText: string): Boolean;
 var LightVals: TLightVals;
@@ -55,7 +58,7 @@ begin
   MakeLightValsFromHeaderLight(@Header, @LightVals, 1, StereoMode);
   PreviousHScalculated := Header.bHScalculated;
   Options := MakeMB3DRenderOptions(ThreadCount, tpNormal);
-  Options.CalculateHardShadows := CalculateHardShadows;
+  Options.CalculateHardShadows := HardShadowMode = hhsmInline;
   if not CalcMandT(@Header, @LightVals, @Stats, @Samples[0],
     Header.Width * SizeOf(TsiLight5), 0, 0, Rect, Options) then
   begin
@@ -69,7 +72,13 @@ begin
     ErrorText := 'Rendering was cancelled';
     Exit;
   end;
-  if CalculateHardShadows then
+  if HardShadowMode = hhsmPost then
+  begin
+    if not ApplyHeadlessPostHardShadows(Header, LightVals, Samples,
+      ThreadCount, HardShadowedPixels, HardShadowLights, ErrorText) then
+      Exit;
+  end
+  else if HardShadowMode = hhsmInline then
   begin
     if (Header.bCalc1HSsoft and 1) <> 0 then
       Header.bHScalculated := (PreviousHScalculated and 1) or
@@ -80,9 +89,12 @@ begin
     MakeLightValsFromHeaderLight(@Header, @LightVals, 1, StereoMode);
   end;
   HitCount := 0;
-  HardShadowedPixels := 0;
-  HardShadowLights := 0;
-  if CalculateHardShadows then
+  if HardShadowMode <> hhsmPost then
+  begin
+    HardShadowedPixels := 0;
+    HardShadowLights := 0;
+  end;
+  if HardShadowMode = hhsmInline then
     for LightIndex := 0 to 5 do
       if (Header.bCalculateHardShadow and (4 shl LightIndex)) <> 0 then
         Inc(HardShadowLights);
@@ -94,7 +106,8 @@ begin
       Inc(HitCount);
       if Samples[Index].Zpos < MinHitZ then MinHitZ := Samples[Index].Zpos;
       if Samples[Index].Zpos > MaxHitZ then MaxHitZ := Samples[Index].Zpos;
-      if CalculateHardShadows and (Samples[Index].SIgradient < 32768) then
+      if (HardShadowMode = hhsmInline) and
+        (Samples[Index].SIgradient < 32768) then
         for LightIndex := 0 to 5 do
           if ((Header.bCalculateHardShadow and (4 shl LightIndex)) <> 0) and
             ((Samples[Index].Shadow and ($400 shl LightIndex)) <> 0) then
@@ -109,8 +122,12 @@ begin
   WriteLn('MB3D_EVENT {"type":"geometry","hits":', HitCount,
     ',"pixels":', Length(Samples), ',"minZ":', MinHitZ, ',"maxZ":', MaxHitZ,
     ',"deSteps":', DESteps, '}');
-  if CalculateHardShadows then
-    WriteLn('MB3D_EVENT {"type":"hard-shadow","mode":"formula-ray",',
+  if HardShadowMode = hhsmInline then
+    WriteLn('MB3D_EVENT {"type":"hard-shadow","mode":"inline-formula-ray",',
+      '"lights":', HardShadowLights, ',"shadowedPixels":',
+      HardShadowedPixels, '}')
+  else if HardShadowMode = hhsmPost then
+    WriteLn('MB3D_EVENT {"type":"hard-shadow","mode":"post-formula-ray",',
       '"lights":', HardShadowLights, ',"shadowedPixels":',
       HardShadowedPixels, '}')
   else
@@ -138,7 +155,7 @@ begin
     WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"disabled",',
       '"shadowedPixels":0,"meanOcclusion":0}');
   end;
-  ShadeMB3DFrame(Header, LightVals, Samples, CalculateHardShadows, Pixels,
+  ShadeMB3DFrame(Header, LightVals, Samples, HardShadowMode <> hhsmOff, Pixels,
     DirectionalLights, SkippedLights, DepthFoggedPixels, DynamicFoggedPixels,
     MeanDepthFog, MeanDynamicFog);
   WriteLn('MB3D_EVENT {"type":"shading","mode":"rgb","directionalLights":',

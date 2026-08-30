@@ -36,7 +36,7 @@ Final stereo render at the dimensions stored in the M3A:
   --threads 4 \
   --assets assets \
   --stereo on \
-  --shadows on \
+  --hard-shadow post \
   --ambient auto
 ```
 
@@ -44,10 +44,13 @@ Stereo writes `frame-000000-L.png` and `frame-000000-R.png`. The worker uses
 the M3A's saved stereo optics but the CLI decides whether stereo is rendered.
 
 `--shadows on` is the default and runs Mandelbulb3D's formula-based hard
-shadow rays for lights selected in the saved header. This can be dramatically
-slower on dense IFS scenes. Shadow rays use a minimum forward step and a 4,096
-step safety ceiling so malformed or near-zero distance estimates cannot make
-a worker run forever. Use `--shadows off` for previews.
+shadow rays inline during the geometry pass. `--hard-shadow post` renders the
+geometry first and then applies a Windows-style hard-shadow post pass from the
+saved z-buffer, which is the better parity target for MB3D's post workflow.
+Both modes can be dramatically slower on dense IFS scenes. Shadow rays use a
+minimum forward step and a 4,096 step safety ceiling so malformed or near-zero
+distance estimates cannot make a worker run forever. Use `--shadows off` or
+`--hard-shadow off` for previews.
 
 `--ambient auto` is the default. For MB3D SSAO24 scenes, `auto` keeps the
 stable radial 24-bit path that currently gives the closest frame-80 Windows
