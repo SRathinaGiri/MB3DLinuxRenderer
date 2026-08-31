@@ -64,9 +64,11 @@ path, or `--ambient off` for diagnostics.
 specular-reflection/transmission settings without changing pixels. This keeps
 current parity renders reproducible while making reflection omissions visible
 in the event log. `--reflection off` suppresses that post step explicitly.
-`--reflection post` is reserved for the Windows `CalcSR` recursive post pass
-and currently fails with a clear unsupported-feature error when a scene has
-active saved reflections.
+`--reflection post` enables the first headless formula-ray reflection pass:
+surface hits are reconstructed from the z-buffer, reflected rays are marched
+through the formula DE, and reflected background/formula hits are blended into
+the RGB output. Transmission is detected and reported but still needs the full
+Windows `CalcSR` vector-color/transmission port.
 
 Current fidelity limits:
 
@@ -78,8 +80,9 @@ Current fidelity limits:
   light-map lights are reported as unsupported in the shading event;
 - saved depth fog and two-color dynamic fog are supported; visible volumetric
   light shapes still need parity validation;
-- specular reflection/transmission is detected and reported, but the recursive
-  Windows `CalcSR` post pass still needs a GUI-free port;
+- specular reflection has an initial headless formula-ray post pass, but
+  transmission and exact Windows `CalcSR` vector paint parity still need a
+  GUI-free port;
 - background maps, transparency, and the remaining GUI post-process chain still
   need GUI-free ports.
 

@@ -36,6 +36,7 @@ var LightVals: TLightVals;
     MeanOcclusion, MeanDepthFog, MeanDynamicFog: Single;
     Options: TMB3DRenderOptions;
     PreviousHScalculated: Integer;
+    ReflectedPixels: Integer;
     AppliedAmbientMode, AppliedReflectionMode: string;
     ReflectionStatus: THeadlessReflectionStatus;
   procedure WriteReflectionEvent;
@@ -57,7 +58,8 @@ var LightVals: TLightVals;
       ',"scattering":',
       FormatFloat('0.######', ReflectionStatus.TransmissionScattering),
       ',"diffuseReflects":', ReflectionStatus.DiffuseReflects,
-      ',"insideOptions":', ReflectionStatus.InsideOptions, '}');
+      ',"insideOptions":', ReflectionStatus.InsideOptions,
+      ',"reflectedPixels":', ReflectedPixels, '}');
   end;
 begin
   Result := False;
@@ -188,8 +190,9 @@ begin
     DynamicFoggedPixels, ',"meanDynamic":',
     FormatFloat('0.######', MeanDynamicFog), ',"dynamicIterations":',
     Header.bDFogIt, '}');
-  if not ApplyHeadlessReflection(Header, ReflectionMode, ReflectionStatus,
-    AppliedReflectionMode, ErrorText) then
+  if not ApplyHeadlessReflection(Header, LightVals, Samples, Pixels,
+    ThreadCount, ReflectionMode, ReflectionStatus, AppliedReflectionMode,
+    ReflectedPixels, ErrorText) then
   begin
     WriteReflectionEvent;
     Exit;

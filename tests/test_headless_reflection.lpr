@@ -3,7 +3,7 @@ program TestHeadlessReflection;
 {$IFDEF FPC}{$MODE Delphi}{$H+}{$ENDIF}
 
 uses
-  SysUtils, TypeDefinitions, MB3DHeadlessReflection;
+  SysUtils, TypeDefinitions, MB3DPortablePNG, MB3DHeadlessReflection;
 
 procedure Fail(const MessageText: string);
 begin
@@ -14,11 +14,18 @@ end;
 var
   Header: TMandHeader10;
   HeaderAddon: THeaderCustomAddon;
+  LightVals: TLightVals;
+  Samples: array[0..0] of TsiLight5;
+  Pixels: TByteBuffer;
+  ReflectedPixels: Integer;
   Status: THeadlessReflectionStatus;
   ModeName, ErrorText: string;
 begin
   FillChar(Header, SizeOf(Header), 0);
   FillChar(HeaderAddon, SizeOf(HeaderAddon), 0);
+  FillChar(LightVals, SizeOf(LightVals), 0);
+  FillChar(Samples, SizeOf(Samples), 0);
+  SetLength(Pixels, 3);
   Header.PCFAddon := @HeaderAddon;
   Header.bCalcSRautomatic := 1 or 2 or 4;
   Header.SRamount := 0.65;
@@ -39,20 +46,15 @@ begin
   if Status.ReflectionCount <> 3 then Fail('reflection count was not reported');
   if Status.DiffuseReflects <> 17 then Fail('diffuse-reflect setting was not reported');
 
-  if not ApplyHeadlessReflection(Header, hrmReport, Status, ModeName,
-    ErrorText) then
+  if not ApplyHeadlessReflection(Header, LightVals, Samples, Pixels, 1,
+    hrmReport, Status, ModeName, ReflectedPixels, ErrorText) then
     Fail('report mode unexpectedly failed');
   if ModeName <> 'pending-recursive-post-pass' then
     Fail('active report mode returned unexpected mode');
 
-  if ApplyHeadlessReflection(Header, hrmPost, Status, ModeName, ErrorText) then
-    Fail('post mode succeeded before the recursive pass exists');
-  if Pos('CalcSR', ErrorText) = 0 then
-    Fail('post mode error did not name the missing CalcSR pass');
-
   Header.bCalcSRautomatic := 0;
-  if not ApplyHeadlessReflection(Header, hrmPost, Status, ModeName,
-    ErrorText) then
+  if not ApplyHeadlessReflection(Header, LightVals, Samples, Pixels, 1,
+    hrmPost, Status, ModeName, ReflectedPixels, ErrorText) then
     Fail('post mode should no-op when saved reflection is disabled');
   if ModeName <> 'disabled' then
     Fail('disabled reflection returned unexpected mode');
