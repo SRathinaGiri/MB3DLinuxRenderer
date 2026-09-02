@@ -67,8 +67,8 @@ in the event log. `--reflection off` suppresses that post step explicitly.
 `--reflection post` enables the first headless formula-ray reflection pass:
 surface hits are reconstructed from the z-buffer, reflected rays are marched
 through the formula DE, and reflected background/formula hits are blended into
-the RGB output. Transmission is detected and reported but still needs the full
-Windows `CalcSR` vector-color/transmission port.
+the RGB output up to the saved `SRreflectioncount`. Transmission is detected
+and reported but still needs the full Windows `CalcSR` transmission port.
 
 Current fidelity limits:
 

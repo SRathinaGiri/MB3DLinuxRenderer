@@ -498,16 +498,20 @@ end;
 
 function TraceReflectedColor(var MCT: TMCTparameter; var It3D: TIteration3Dext;
   const StartPos: TPos3D; const IncomingVec, Normal: TVec3D;
-  const Header: TMandHeader10;
-  const LightVals: TLightVals; MaxSteps: Integer; out Color: array of Single): Boolean;
+  const Header: TMandHeader10; const LightVals: TLightVals;
+  const Status: THeadlessReflectionStatus; Depth, MaxSteps: Integer;
+  out Color: array of Single): Boolean;
 var
-  Ray: TVec3D;
+  Ray, HitNormal: TVec3D;
   RayS: TSVec;
   Step, Total, DE, LastStep, RSF: Double;
+  MixAmount: Single;
   Rough: Single;
   Temp: TsiLight5;
+  NextStart: TPos3D;
+  RecColor: array[0..2] of Single;
   Hit: Boolean;
-  Index: Integer;
+  Index, Component: Integer;
 begin
   Result := False;
   Hit := False;
@@ -556,11 +560,25 @@ begin
   MCT.mPsiLight := @Temp;
   Rough := 1;
   TCalculateNormalsFunc(MCT.pCalcNormals)(@MCT, Rough);
+  HitNormal := MakeDVecFromNormals(@Temp);
   RMdoColor(@MCT);
   CalcZposAndRough(@Temp, @MCT, Total);
   RayS := NormaliseSVector(DVecToSVec(Ray));
   ShadeReflectedHit(Header, LightVals, Temp, RayS,
     Total * Header.dStepWidth + MCT.sZZstmitDif, Color);
+  if Depth < Status.ReflectionCount then
+  begin
+    MixAmount := ReflectionWeight(LightVals, Temp, Status);
+    if MixAmount > 0.001 then
+    begin
+      mCopyVec(@NextStart, @It3D.C1);
+      if TraceReflectedColor(MCT, It3D, NextStart, Ray, HitNormal,
+        Header, LightVals, Status, Depth + 1, MaxSteps, RecColor) then
+        for Component := 0 to 2 do
+          Color[Component] := Color[Component] * (1 - MixAmount) +
+            RecColor[Component] * MixAmount;
+    end;
+  end;
   Result := True;
 end;
 
@@ -643,7 +661,7 @@ begin
       mCopyVec(@StartPos, @It3D.C1);
       Incoming := MCT.mVgradsFOV;
       if not TraceReflectedColor(MCT, It3D, StartPos, Incoming, Normal,
-        Header, LightVals, 512, RefColor) then Continue;
+        Header, LightVals, Status, 1, 512, RefColor) then Continue;
       Offset := Index * 3;
       for Component := 0 to 2 do
         Pixels[Offset + Component] := ClampByte(Pixels[Offset + Component] *
