@@ -37,6 +37,9 @@ Each case reports:
 - `rootMeanSquareChannelError`: RMS RGB channel error
 - `maxChannelError`: largest single-channel error
 
+Manifest `frame` values are one-based to match Mandelbulb3D's Windows frame
+numbering and exported names such as `Frame000001.png`.
+
 The manifest supports per-case thresholds:
 
 - `maxMae`

@@ -36,6 +36,7 @@ type
 procedure PrintUsage;
 begin
   WriteLn('Usage: mb3d-worker --animation PATH --frame N --output PATH [--threads N] [--assets PATH] [--stereo on|off] [--size WIDTHxHEIGHT] [--shadows on|off] [--hard-shadow inline|post|off] [--ambient auto|classic24|radial24|off] [--reflection report|post|off]');
+  WriteLn('       --frame is one-based to match Mandelbulb3D frame numbering');
   WriteLn('       mb3d-worker --help | --version');
 end;
 
@@ -283,7 +284,15 @@ begin
         WriteLn(StdErr, 'Invalid value for ', Argument, ': ', TextValue);
         Exit(ExitInvalidArguments);
       end;
-      if Argument = '--frame' then Request.FrameNumber := Value
+      if Argument = '--frame' then
+      begin
+        if Value = 0 then
+        begin
+          WriteLn(StdErr, '--frame is one-based; use --frame 1 for the first frame');
+          Exit(ExitInvalidArguments);
+        end;
+        Request.FrameNumber := Value;
+      end
       else if Value = 0 then
       begin
         WriteLn(StdErr, '--threads must be greater than zero');
@@ -330,7 +339,7 @@ var
   InterpolatedFormulaCount: Integer;
   OutputPlan: TMB3DOutputPlan;
   RenderHeader: TMandHeader10;
-  FormulaIndex: Integer;
+  FormulaIndex, InternalFrameNumber: Integer;
 begin
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow,
     exUnderflow, exPrecision]);
@@ -352,7 +361,8 @@ begin
       end
       else
       begin
-        if not Animation.TryLocateFrame(Request.FrameNumber, KeyFrameIndex,
+        InternalFrameNumber := Request.FrameNumber - 1;
+        if not Animation.TryLocateFrame(InternalFrameNumber, KeyFrameIndex,
           SubFrame, ErrorText) then
         begin
           WriteLn(StdErr, 'Unable to resolve animation frame: ', ErrorText);
@@ -417,7 +427,9 @@ begin
               ',"options":', HeaderAddon.Formulas[FormulaIndex].iOptionCount, '}');
           end;
         WriteLn('MB3D_EVENT {"type":"header","keyframe":', KeyFrameIndex,
-          ',"subframe":', SubFrame, ',"width":', Header.Width,
+          ',"subframe":', SubFrame, ',"requestedFrame":',
+          Request.FrameNumber, ',"internalFrame":', InternalFrameNumber,
+          ',"width":', Header.Width,
           ',"height":', Header.Height, ',"calc3D":', Header.bCalc3D,
           ',"insideOptions":', HeaderAddon.bOptions2, ',"zStart":',
           FloatToStr(Header.dZstart), ',"zEnd":', FloatToStr(Header.dZend),
@@ -446,6 +458,7 @@ begin
         else
           WriteLn('MB3D_EVENT {"type":"outputs","mono":"', JsonString(OutputPlan.MonoFile), '"}');
         WriteLn('MB3D_EVENT {"type":"started","frame":', Request.FrameNumber,
+          ',"internalFrame":', InternalFrameNumber,
           ',"keyframes":', Animation.KeyFrameCount, '}');
         RenderHeader := Header;
         if OutputPlan.Stereo then

@@ -17,7 +17,7 @@ Fast mono preview using the saved camera and scene parameters:
 ```sh
 ./build/linux-i386/mb3d_worker \
   --animation scene.m3a \
-  --frame 0 \
+  --frame 1 \
   --output jobs/output/preview.png \
   --threads 4 \
   --assets assets \
@@ -32,8 +32,8 @@ Final stereo render at the dimensions stored in the M3A:
 ```sh
 ./build/linux-i386/mb3d_worker \
   --animation scene.m3a \
-  --frame 0 \
-  --output jobs/output/frame-000000.png \
+  --frame 1 \
+  --output jobs/output/frame-000001.png \
   --threads 4 \
   --assets assets \
   --stereo on \
@@ -42,8 +42,10 @@ Final stereo render at the dimensions stored in the M3A:
   --reflection report
 ```
 
-Stereo writes `frame-000000-L.png` and `frame-000000-R.png`. The worker uses
+Stereo writes `frame-000001-L.png` and `frame-000001-R.png`. The worker uses
 the M3A's saved stereo optics but the CLI decides whether stereo is rendered.
+`--frame` is one-based to match Mandelbulb3D's Windows frame numbering, so
+`--frame 1` renders the first animation frame.
 
 `--shadows on` is the default and runs Mandelbulb3D's formula-based hard
 shadow rays inline during the geometry pass. `--hard-shadow post` renders the
