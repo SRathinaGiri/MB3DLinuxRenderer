@@ -6,9 +6,17 @@ interface
 
 uses TypeDefinitions;
 
+type
+  THeadlessAmbientMode = (hamAuto, hamClassic24, hamRadial24, hamOff);
+
 function ApplyHeadlessAmbientShadow(const Header: TMandHeader10;
   var Samples: array of TsiLight5; out ShadowedPixels: Integer;
-  out MeanOcclusion: Single): Boolean;
+  out MeanOcclusion: Single; AmbientMode: THeadlessAmbientMode;
+  out AppliedMode: string): Boolean; overload;
+
+function ApplyHeadlessAmbientShadow(const Header: TMandHeader10;
+  var Samples: array of TsiLight5; out ShadowedPixels: Integer;
+  out MeanOcclusion: Single): Boolean; overload;
 
 implementation
 
@@ -19,6 +27,153 @@ type
   TAngleMaximum = array[0..31] of SmallInt;
   TAngleMaximumBuffer = array of TAngleMaximum;
   TCardinalBuffer = array of Cardinal;
+  TClassicAngleMaximum4 = array[0..35, 0..3] of Single;
+
+function ClassicEncodedDepth(const Sample: TsiLight5): Integer;
+begin
+  Result := Integer((Cardinal(Sample.RoughZposFine) or
+    (Cardinal(Sample.Zpos) shl 16)) shr 8);
+end;
+
+function FastIntArcTan2(Y, X: Integer): Integer;
+begin
+  if X = 0 then
+    Result := Integer(Y >= 0) * 16 + 8
+  else if Y = 0 then
+    Result := Integer(X >= 0) * 16
+  else if Y < 0 then
+  begin
+    if X < 0 then
+    begin
+      if X >= Y then Result := 7 - (X * 4) div Y
+      else Result := (Y * 4) div X;
+    end
+    else
+    begin
+      if -Y < X then Result := 15 + (Y * 4) div X
+      else Result := 8 - (X * 4) div Y;
+    end;
+  end
+  else
+  begin
+    if X >= 0 then
+    begin
+      if X > Y then Result := 16 + (Y * 4) div X
+      else Result := 23 - (X * 4) div Y;
+    end
+    else
+    begin
+      if Y < -X then Result := 31 + (Y * 4) div X
+      else Result := 24 - (X * 4) div Y;
+    end;
+  end;
+end;
+
+function BuildClassicATLevels(const Samples: array of TsiLight5;
+  Width, Height: Integer; var Levels: TATlevel; var CorrMul: Single;
+  var ZSub: Integer): Integer;
+const
+  NeighbourOffsetX: array[0..7] of ShortInt = (-1, 0, 1, -1, 1, -1, 0, 1);
+  NeighbourOffsetY: array[0..7] of ShortInt = (-1, -1, -1, 0, 0, 1, 1, 1);
+var
+  X, Y, I, N, LevelIndex, Step, Step2, NeighbourIndex: Integer;
+  MinZ, MaxZ, MaxNeighbour, CenterValue, LeftValue, RightValue,
+  UpValue, DownValue, LeftIndex, RightIndex, UpIndex, DownIndex,
+  RowBase: Integer;
+  Scale: Single;
+begin
+  try
+    Result := 1;
+    X := Width div 16;
+    repeat
+      Inc(Result);
+      X := X shr 1;
+    until (Result = 8) or (X < 4);
+    for X := 1 to Result + 1 do SetLength(Levels[X], Width * Height);
+
+    MinZ := 32767;
+    MaxZ := 0;
+    for I := 0 to High(Samples) do
+      if Samples[I].Zpos < 32768 then
+      begin
+        if Samples[I].Zpos > MaxZ then MaxZ := Samples[I].Zpos;
+        if Samples[I].Zpos < MinZ then MinZ := Samples[I].Zpos;
+      end;
+    if MaxZ < MinZ then
+    begin
+      MaxZ := 32768;
+      MinZ := 0;
+    end
+    else
+      Inc(MaxZ);
+    Scale := 128 / (MaxZ - MinZ);
+    ZSub := MinZ shl 8;
+    CorrMul := Scale;
+    for I := 0 to High(Samples) do
+      if Samples[I].Zpos < 32768 then
+        Levels[1][I] := Round((ClassicEncodedDepth(Samples[I]) - ZSub) *
+          Scale)
+      else
+        Levels[1][I] := 0;
+
+    for Y := 1 to Height - 2 do
+      for X := 1 to Width - 2 do
+      begin
+        I := Y * Width + X;
+        CenterValue := Levels[1][I];
+        MaxNeighbour := 0;
+        for N := 0 to 7 do
+        begin
+          NeighbourIndex := (Y + NeighbourOffsetY[N]) * Width + X +
+            NeighbourOffsetX[N];
+          if Levels[1][NeighbourIndex] >= CenterValue then
+          begin
+            MaxNeighbour := 0;
+            Break;
+          end;
+          if Levels[1][NeighbourIndex] > MaxNeighbour then
+            MaxNeighbour := Levels[1][NeighbourIndex];
+        end;
+        if MaxNeighbour > 0 then Levels[1][I] := MaxNeighbour + 1;
+      end;
+
+    Step := 1;
+    for LevelIndex := 2 to Result do
+    begin
+      Step2 := Step * 2;
+      Move(Levels[LevelIndex - 1][0], Levels[LevelIndex][0],
+        Width * Height * SizeOf(Word));
+      for Y := 0 to Height - 1 do
+      begin
+        RowBase := Y * Width;
+        for X := 0 to Width - 1 do
+        begin
+          LeftIndex := Max(0, X - Step2);
+          RightIndex := Min(Width - 1, X + Step2);
+          CenterValue := Levels[LevelIndex - 1][RowBase + X];
+          LeftValue := Levels[LevelIndex - 1][RowBase + LeftIndex];
+          RightValue := Levels[LevelIndex - 1][RowBase + RightIndex];
+          Levels[LevelIndex + 1][RowBase + X] := (CenterValue + 1 +
+            ((LeftValue + RightValue + 1) shr 1)) shr 1;
+        end;
+      end;
+      for X := 0 to Width - 1 do
+        for Y := 0 to Height - 1 do
+        begin
+          UpIndex := Max(0, Y - Step2);
+          DownIndex := Min(Height - 1, Y + Step2);
+          CenterValue := Levels[LevelIndex + 1][Y * Width + X];
+          UpValue := Levels[LevelIndex + 1][UpIndex * Width + X];
+          DownValue := Levels[LevelIndex + 1][DownIndex * Width + X];
+          Levels[LevelIndex][Y * Width + X] := (CenterValue + 1 +
+            ((UpValue + DownValue + 1) shr 1)) shr 1;
+        end;
+      Step := Step * 2;
+    end;
+  except
+    Result := 0;
+  end;
+end;
 
 const
   DirectionCount = 8;
@@ -261,18 +416,271 @@ begin
   Result := True;
 end;
 
-function ApplyHeadlessAmbientShadow(const Header: TMandHeader10;
+function ApplyClassic24AmbientShadow(const Header: TMandHeader10;
   var Samples: array of TsiLight5; out ShadowedPixels: Integer;
   out MeanOcclusion: Single): Boolean;
+const
+  Sentinel = $FFFFFF;
+var
+  Levels: TATlevel;
+  AngMax: TClassicAngleMaximum4;
+  ZP4: array[0..3] of Integer;
+  Width, Height, X, Y, X2, Y2, YA, XA, XE, YE, XA2, XA2T,
+  MaxRadius, MinRadius, Step, XT, YA2, ID4C, X3, ID4L,
+  LevelIndex, MinRadiusSquared, MaxRadiusSquared, AngleCenter,
+  RadiusSquared, AngleWidth, II, OffsetIndex, LevelCount, ZSub,
+  PixelIndex: Integer;
+  CorrMul, DepthStep, InvRadius, LevelRadius, ThresholdScaled, Scale,
+  ThresholdLevel, Slope, SumAngles, TotalOcclusion: Single;
+  Do4, Do4Level, MultiAngle: Boolean;
+  ZCorrection, ZMultiplier, ZStartDifference, ZScaleFactor: Double;
+  HeaderCopy: TMandHeader10;
+begin
+  Result := False;
+  ShadowedPixels := 0;
+  MeanOcclusion := 0;
+  Width := Header.Width;
+  Height := Header.Height;
+  if (Width < 1) or (Height < 1) or
+    (Length(Samples) <> Width * Height) then Exit;
+
+  HeaderCopy := Header;
+  CalcPPZvals(HeaderCopy, ZCorrection, ZMultiplier, ZStartDifference);
+  if (ZCorrection = 0) or (ZMultiplier = 0) then Exit;
+  ZScaleFactor := (Sqr(256 / ZMultiplier + 1) - 1) / ZCorrection;
+  LevelCount := BuildClassicATLevels(Samples, Width, Height, Levels,
+    CorrMul, ZSub);
+  if LevelCount < 1 then Exit;
+  DepthStep := ZScaleFactor / (CorrMul * 256);
+  if DepthStep = 0 then Exit;
+  ThresholdScaled := Max(0.01, Header.sAmbShadowThreshold) / DepthStep;
+  Scale := 1.35 * 32767 / (Pi * 32 *
+    Power(ArcTan(Max(0.01, Header.sAmbShadowThreshold) *
+    Sqrt(Sqrt(LevelCount))), 0.8));
+
+  for PixelIndex := 0 to High(Samples) do Samples[PixelIndex].AmbShadow := 0;
+  TotalOcclusion := 0;
+  for Y := 0 to Height - 1 do
+  begin
+    X := 0;
+    while X < Width do
+    begin
+      PixelIndex := Y * Width + X;
+      if Samples[PixelIndex].Zpos < 32768 then
+        ZP4[0] := Round((ClassicEncodedDepth(Samples[PixelIndex]) - ZSub) *
+          CorrMul)
+      else
+        ZP4[0] := 32768;
+      Do4 := X < Width - 3;
+      if Do4 then
+      begin
+        for X2 := 1 to 3 do
+          if Samples[PixelIndex + X2].Zpos < 32768 then
+            ZP4[X2] := Round((ClassicEncodedDepth(Samples[PixelIndex + X2]) -
+              ZSub) * CorrMul)
+          else
+            ZP4[X2] := 32768;
+        ID4C := 3;
+      end
+      else
+        ID4C := 0;
+
+      if (ZP4[0] < 32768) or (Do4 and
+        (Integer(ZP4[1]) + ZP4[2] + ZP4[3] < 98304)) then
+      begin
+        for X2 := 0 to 35 do
+        begin
+          AngMax[X2, 0] := -1e10;
+          if Do4 then
+          begin
+            AngMax[X2, 1] := -1e10;
+            AngMax[X2, 2] := -1e10;
+            AngMax[X2, 3] := -1e10;
+          end;
+        end;
+
+        MaxRadius := 0;
+        MinRadius := 0;
+        for LevelIndex := 1 to LevelCount do
+        begin
+          Step := 1 shl (LevelIndex - 1);
+          LevelRadius := Sqrt(Step) * 5;
+          MaxRadius := MaxRadius + 4 * Step;
+          MaxRadiusSquared := MaxRadius * MaxRadius;
+          MinRadiusSquared := MinRadius * MinRadius;
+          MultiAngle := Round(LevelRadius / (MinRadius + 1)) > 0;
+          ThresholdLevel := ThresholdScaled * Sqrt(Sqrt(LevelCount /
+            LevelIndex));
+
+          YA := -MaxRadius;
+          if YA + Y < 0 then
+          begin
+            YA2 := YA;
+            while YA2 + Y < 0 do Inc(YA2, Step);
+            if YA2 + Y >= Height then YA2 := Height - Y - 1;
+            YA := -Y;
+            if YA = YA2 then YA2 := Sentinel;
+          end
+          else
+            YA2 := Sentinel;
+          if Y + MaxRadius >= Height then YE := Height - Y - 1
+          else YE := MaxRadius;
+
+          Do4Level := Do4 and (X >= MaxRadius) and
+            (X < Width - MaxRadius - 3);
+          if Do4Level then ID4L := ID4C else ID4L := 0;
+          XA := -MaxRadius;
+          XA2 := Sentinel;
+          XE := MaxRadius;
+
+          Y2 := YA;
+          repeat
+            if Y2 > YA2 then
+            begin
+              Y2 := YA2;
+              YA2 := Sentinel;
+            end;
+
+            OffsetIndex := 0;
+            repeat
+              if not Do4Level then
+              begin
+                X2 := X + OffsetIndex;
+                XA := -MaxRadius;
+                if XA + X2 < 0 then
+                begin
+                  XA2 := XA;
+                  while XA2 + X2 < 0 do Inc(XA2, Step);
+                  if XA2 + X2 >= Width then XA2 := Width - X2 - 1;
+                  XA := -X2;
+                  if XA = XA2 then XA2 := Sentinel;
+                end
+                else
+                  XA2 := Sentinel;
+                if X2 + MaxRadius >= Width then XE := Width - X2 - 1
+                else XE := MaxRadius;
+              end;
+
+              X2 := XA;
+              XA2T := XA2;
+              repeat
+                if X2 > XA2T then
+                begin
+                  Inc(X2, XA2T - X2);
+                  X2 := XA2T;
+                  XA2T := Sentinel;
+                end;
+                RadiusSquared := Y2 * Y2 + X2 * X2;
+                if (RadiusSquared > MinRadiusSquared) and
+                  (RadiusSquared <= MaxRadiusSquared) then
+                begin
+                  AngleCenter := FastIntArcTan2(Y2, X2);
+                  InvRadius := 1 / Sqrt(RadiusSquared);
+                  if MultiAngle then
+                  begin
+                    AngleWidth := Round(LevelRadius * InvRadius);
+                    for X3 := 0 to ID4L do
+                    begin
+                      Slope := (Integer(Levels[LevelIndex][X + X2 +
+                        OffsetIndex + X3 + (Y + Y2) * Width]) -
+                        ZP4[X3 + OffsetIndex]) * InvRadius;
+                      if Slope > ThresholdLevel then Slope := ThresholdLevel;
+                      for II := 0 to AngleWidth do
+                        if AngMax[(AngleCenter - (AngleWidth shr 1) + II) and
+                          31, X3 + OffsetIndex] < Slope then
+                          AngMax[(AngleCenter - (AngleWidth shr 1) + II) and
+                            31, X3 + OffsetIndex] := Slope;
+                    end;
+                  end
+                  else
+                    for X3 := OffsetIndex to OffsetIndex + ID4L do
+                    begin
+                      Slope := (Integer(Levels[LevelIndex][X + X2 + X3 +
+                        (Y + Y2) * Width]) - ZP4[X3]) * InvRadius;
+                      if Slope > ThresholdLevel then Slope := ThresholdLevel;
+                      if AngMax[AngleCenter, X3] < Slope then
+                        AngMax[AngleCenter, X3] := Slope;
+                    end;
+                end;
+                XT := X2;
+                Inc(X2, Step);
+                if (X2 > XE) and (XT < XE) then X2 := XE;
+              until X2 > XE;
+
+              Inc(OffsetIndex);
+            until Do4Level or (OffsetIndex > ID4C);
+
+            Inc(Y2, Step);
+            if (Y2 > YE) and (Y2 - Step < YE) then Y2 := YE;
+          until Y2 > YE;
+
+          MinRadius := MaxRadius;
+        end;
+
+        for X3 := 0 to ID4C do
+        begin
+          if X + X3 >= Width then Break;
+          for X2 := 0 to 3 do
+            if AngMax[X2 + 32, X3] > AngMax[X2, X3] then
+              AngMax[X2, X3] := AngMax[X2 + 32, X3];
+          SumAngles := 0;
+          for X2 := 0 to 31 do
+            if AngMax[X2, X3] > -1e9 then
+              SumAngles := SumAngles + ArcTan(AngMax[X2, X3] * DepthStep);
+          PixelIndex := Y * Width + X + X3;
+          Samples[PixelIndex].AmbShadow := Max(0, Min(16383,
+            Round(SumAngles * Scale)));
+          if Samples[PixelIndex].AmbShadow > 0 then Inc(ShadowedPixels);
+        end;
+      end;
+
+      if Do4 then Inc(X, 4) else Inc(X);
+    end;
+  end;
+
+  for PixelIndex := 0 to High(Samples) do
+    TotalOcclusion := TotalOcclusion + Samples[PixelIndex].AmbShadow / 16383;
+  if Length(Samples) > 0 then MeanOcclusion := TotalOcclusion / Length(Samples);
+  Result := True;
+end;
+
+function ApplyHeadlessAmbientShadow(const Header: TMandHeader10;
+  var Samples: array of TsiLight5; out ShadowedPixels: Integer;
+  out MeanOcclusion: Single; AmbientMode: THeadlessAmbientMode;
+  out AppliedMode: string): Boolean;
 var X, Y, Direction, RadiusIndex, SampleIndex, NeighbourIndex: Integer;
     NX, NY, DepthDifference, ValidDirections: Integer;
     DirectionOcclusion, Occlusion, TotalOcclusion, Distance,
     DepthScale, Threshold: Single;
 begin
-  if ((Header.bCalcAmbShadowAutomatic shr 1) and 7) = 4 then
+  AppliedMode := 'disabled';
+  if AmbientMode = hamOff then
+  begin
+    ShadowedPixels := 0;
+    MeanOcclusion := 0;
+    for SampleIndex := 0 to High(Samples) do Samples[SampleIndex].AmbShadow := 0;
+    Result := True;
+    Exit;
+  end;
+  if AmbientMode = hamClassic24 then
+  begin
+    Result := ApplyClassic24AmbientShadow(Header, Samples, ShadowedPixels,
+      MeanOcclusion);
+    if Result then AppliedMode := 'mb3d-24bit-classic';
+    Exit;
+  end;
+  if AmbientMode = hamRadial24 then
   begin
     Result := ApplyRadial24AmbientShadow(Header, Samples, ShadowedPixels,
       MeanOcclusion);
+    if Result then AppliedMode := 'mb3d-24bit-radial';
+    Exit;
+  end;
+  if (Header.bCalcAmbShadowAutomatic and 12) in [4, 8] then
+  begin
+    Result := ApplyRadial24AmbientShadow(Header, Samples, ShadowedPixels,
+      MeanOcclusion);
+    if Result then AppliedMode := 'mb3d-24bit-radial';
     Exit;
   end;
   Result := False;
@@ -327,7 +735,18 @@ begin
       TotalOcclusion := TotalOcclusion + Occlusion;
     end;
   if Length(Samples) > 0 then MeanOcclusion := TotalOcclusion / Length(Samples);
+  AppliedMode := 'portable-horizon';
   Result := True;
+end;
+
+function ApplyHeadlessAmbientShadow(const Header: TMandHeader10;
+  var Samples: array of TsiLight5; out ShadowedPixels: Integer;
+  out MeanOcclusion: Single): Boolean;
+var
+  AppliedMode: string;
+begin
+  Result := ApplyHeadlessAmbientShadow(Header, Samples, ShadowedPixels,
+    MeanOcclusion, hamAuto, AppliedMode);
 end;
 
 end.

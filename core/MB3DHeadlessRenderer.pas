@@ -4,19 +4,24 @@ unit MB3DHeadlessRenderer;
 
 interface
 
-uses TypeDefinitions;
+uses TypeDefinitions, MB3DHeadlessAmbientShadow, MB3DHeadlessReflection;
+
+type
+  THeadlessHardShadowMode = (hhsmOff, hhsmInline, hhsmPost);
 
 function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
-  ThreadCount: Integer; CalculateHardShadows: Boolean;
+  ThreadCount: Integer; HardShadowMode: THeadlessHardShadowMode;
+  AmbientMode: THeadlessAmbientMode; ReflectionMode: THeadlessReflectionMode;
   const OutputFile: string; out ErrorText: string): Boolean;
 
 implementation
 
 uses Classes, SysUtils, Types, Math, Calc, HeaderTrafos, MB3DPortablePNG,
-  MB3DHeadlessShading, MB3DHeadlessAmbientShadow;
+  MB3DHeadlessShading, MB3DHeadlessHardShadow;
 
 function RenderMB3DFrame(var Header: TMandHeader10; StereoMode,
-  ThreadCount: Integer; CalculateHardShadows: Boolean;
+  ThreadCount: Integer; HardShadowMode: THeadlessHardShadowMode;
+  AmbientMode: THeadlessAmbientMode; ReflectionMode: THeadlessReflectionMode;
   const OutputFile: string; out ErrorText: string): Boolean;
 var LightVals: TLightVals;
     Stats: TCalcThreadStats;
@@ -30,6 +35,32 @@ var LightVals: TLightVals;
     DESteps: Int64;
     MeanOcclusion, MeanDepthFog, MeanDynamicFog: Single;
     Options: TMB3DRenderOptions;
+    PreviousHScalculated: Integer;
+    ReflectedPixels: Integer;
+    AppliedAmbientMode, AppliedReflectionMode: string;
+    ReflectionStatus: THeadlessReflectionStatus;
+  procedure WriteReflectionEvent;
+  begin
+    WriteLn('MB3D_EVENT {"type":"reflection","mode":"',
+      AppliedReflectionMode, '","savedEnabled":',
+      LowerCase(BoolToStr(ReflectionStatus.SavedEnabled, True)),
+      ',"active":', LowerCase(BoolToStr(ReflectionStatus.Active, True)),
+      ',"amount":', FormatFloat('0.######', ReflectionStatus.Amount),
+      ',"count":', ReflectionStatus.ReflectionCount,
+      ',"transmission":',
+      LowerCase(BoolToStr(ReflectionStatus.TransmissionEnabled, True)),
+      ',"onlyDIFS":',
+      LowerCase(BoolToStr(ReflectionStatus.TransmissionOnlyDIFS, True)),
+      ',"transmissionIndex":',
+      FormatFloat('0.######', ReflectionStatus.TransmissionIndex),
+      ',"absorption":',
+      FormatFloat('0.######', ReflectionStatus.TransmissionAbsorption),
+      ',"scattering":',
+      FormatFloat('0.######', ReflectionStatus.TransmissionScattering),
+      ',"diffuseReflects":', ReflectionStatus.DiffuseReflects,
+      ',"insideOptions":', ReflectionStatus.InsideOptions,
+      ',"reflectedPixels":', ReflectedPixels, '}');
+  end;
 begin
   Result := False;
   ErrorText := '';
@@ -49,8 +80,9 @@ begin
   FillChar(Samples[0], Length(Samples) * SizeOf(TsiLight5), 0);
   Rect := Types.Rect(0, 0, Header.Width - 1, Header.Height - 1);
   MakeLightValsFromHeaderLight(@Header, @LightVals, 1, StereoMode);
+  PreviousHScalculated := Header.bHScalculated;
   Options := MakeMB3DRenderOptions(ThreadCount, tpNormal);
-  Options.CalculateHardShadows := CalculateHardShadows;
+  Options.CalculateHardShadows := HardShadowMode = hhsmInline;
   if not CalcMandT(@Header, @LightVals, @Stats, @Samples[0],
     Header.Width * SizeOf(TsiLight5), 0, 0, Rect, Options) then
   begin
@@ -64,10 +96,29 @@ begin
     ErrorText := 'Rendering was cancelled';
     Exit;
   end;
+  if HardShadowMode = hhsmPost then
+  begin
+    if not ApplyHeadlessPostHardShadows(Header, LightVals, Samples,
+      ThreadCount, HardShadowedPixels, HardShadowLights, ErrorText) then
+      Exit;
+  end
+  else if HardShadowMode = hhsmInline then
+  begin
+    if (Header.bCalc1HSsoft and 1) <> 0 then
+      Header.bHScalculated := (PreviousHScalculated and 1) or
+        Header.bCalculateHardShadow
+    else
+      Header.bHScalculated := (PreviousHScalculated and $FD) or
+        Header.bCalculateHardShadow;
+    MakeLightValsFromHeaderLight(@Header, @LightVals, 1, StereoMode);
+  end;
   HitCount := 0;
-  HardShadowedPixels := 0;
-  HardShadowLights := 0;
-  if CalculateHardShadows then
+  if HardShadowMode <> hhsmPost then
+  begin
+    HardShadowedPixels := 0;
+    HardShadowLights := 0;
+  end;
+  if HardShadowMode = hhsmInline then
     for LightIndex := 0 to 5 do
       if (Header.bCalculateHardShadow and (4 shl LightIndex)) <> 0 then
         Inc(HardShadowLights);
@@ -79,10 +130,11 @@ begin
       Inc(HitCount);
       if Samples[Index].Zpos < MinHitZ then MinHitZ := Samples[Index].Zpos;
       if Samples[Index].Zpos > MaxHitZ then MaxHitZ := Samples[Index].Zpos;
-      if CalculateHardShadows and (Samples[Index].SIgradient < 32768) then
+      if (HardShadowMode = hhsmInline) and
+        (Samples[Index].SIgradient < 32768) then
         for LightIndex := 0 to 5 do
           if ((Header.bCalculateHardShadow and (4 shl LightIndex)) <> 0) and
-            ((Samples[Index].Shadow and ($400 shl LightIndex)) = 0) then
+            ((Samples[Index].Shadow and ($400 shl LightIndex)) <> 0) then
           begin
             Inc(HardShadowedPixels);
             Break;
@@ -94,8 +146,12 @@ begin
   WriteLn('MB3D_EVENT {"type":"geometry","hits":', HitCount,
     ',"pixels":', Length(Samples), ',"minZ":', MinHitZ, ',"maxZ":', MaxHitZ,
     ',"deSteps":', DESteps, '}');
-  if CalculateHardShadows then
-    WriteLn('MB3D_EVENT {"type":"hard-shadow","mode":"formula-ray",',
+  if HardShadowMode = hhsmInline then
+    WriteLn('MB3D_EVENT {"type":"hard-shadow","mode":"inline-formula-ray",',
+      '"lights":', HardShadowLights, ',"shadowedPixels":',
+      HardShadowedPixels, '}')
+  else if HardShadowMode = hhsmPost then
+    WriteLn('MB3D_EVENT {"type":"hard-shadow","mode":"post-formula-ray",',
       '"lights":', HardShadowLights, ',"shadowedPixels":',
       HardShadowedPixels, '}')
   else
@@ -104,14 +160,16 @@ begin
   if (Header.bCalcAmbShadowAutomatic and 1) <> 0 then
   begin
     if ApplyHeadlessAmbientShadow(Header, Samples, ShadowedPixels,
-      MeanOcclusion) then
-      if ((Header.bCalcAmbShadowAutomatic shr 1) and 7) = 4 then
-        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"mb3d-24bit-radial",',
+      MeanOcclusion, AmbientMode, AppliedAmbientMode) then
+      if Pos('24bit', AppliedAmbientMode) > 0 then
+        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"',
+          AppliedAmbientMode, '",',
           '"passes":', Max(1, Header.SSAORcount), ',"shadowedPixels":',
           ShadowedPixels, ',"meanOcclusion":',
           FormatFloat('0.######', MeanOcclusion), '}')
       else
-        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"portable-horizon",',
+        WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"',
+        AppliedAmbientMode, '",',
         '"shadowedPixels":', ShadowedPixels, ',"meanOcclusion":',
         FormatFloat('0.######', MeanOcclusion), '}');
   end
@@ -121,7 +179,7 @@ begin
     WriteLn('MB3D_EVENT {"type":"ambient-shadow","mode":"disabled",',
       '"shadowedPixels":0,"meanOcclusion":0}');
   end;
-  ShadeMB3DFrame(Header, LightVals, Samples, CalculateHardShadows, Pixels,
+  ShadeMB3DFrame(Header, LightVals, Samples, HardShadowMode <> hhsmOff, Pixels,
     DirectionalLights, SkippedLights, DepthFoggedPixels, DynamicFoggedPixels,
     MeanDepthFog, MeanDynamicFog);
   WriteLn('MB3D_EVENT {"type":"shading","mode":"rgb","directionalLights":',
@@ -132,6 +190,14 @@ begin
     DynamicFoggedPixels, ',"meanDynamic":',
     FormatFloat('0.######', MeanDynamicFog), ',"dynamicIterations":',
     Header.bDFogIt, '}');
+  if not ApplyHeadlessReflection(Header, LightVals, Samples, Pixels,
+    ThreadCount, ReflectionMode, ReflectionStatus, AppliedReflectionMode,
+    ReflectedPixels, ErrorText) then
+  begin
+    WriteReflectionEvent;
+    Exit;
+  end;
+  WriteReflectionEvent;
   Result := SaveRGB8PNG(OutputFile, Header.Width, Header.Height, Pixels, ErrorText);
 end;
 

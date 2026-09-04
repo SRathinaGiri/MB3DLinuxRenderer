@@ -1,0 +1,18 @@
+{
+  "assets": "../assets",
+  "cases": [
+    {
+      "name": "fractal20260325-frame-0080",
+      "animation": "/home/srg/mb3d-test/Fractal20260325.m3a",
+      "frame": 80,
+      "reference": "/mnt/c/Users/acer/AppData/Local/Temp/codex-clipboard-90401944-aab0-483d-92cc-9a8460653816.png",
+      "output": "fractal20260325-frame-0080-linux.png",
+      "stereo": "off",
+      "shadows": "off",
+      "ambient": "auto",
+      "threads": 4,
+      "minCompletionPercent": 94.0,
+      "maxMae": 15.0
+    }
+  ]
+}

@@ -1071,7 +1071,7 @@ procedure MakeLightValsFromHeaderLight(Header: TPMandHeader10;
   Lvals: TPLightVals; ImScale: Double; StereoMode: Integer);
 var
   HLight: TPLightingParas9;
-  I: Integer;
+  I, J: Integer;
   Lamp, LightScale, AmbientScale, Temp, DTemp: Single;
   AngleX, AngleY: Double;
   CameraMatrix: TMatrix3;
@@ -1214,6 +1214,34 @@ begin
       end;
       ScaleSVectorV(@Lvals.PLValigned.sLCols[I], Lamp);
     end;
+  end;
+  for I := 0 to 9 do
+  begin
+    Lvals.PLValigned.ColDif[I] := ColToSVec(HLight.LCols[I].ColorDif,
+      Lvals.bCalcPixColSqr);
+    Lvals.PLValigned.ColSpe[I] := ColAToSVec(HLight.LCols[I].ColorSpe,
+      Lvals.bCalcPixColSqr);
+    Lvals.ColPos[I] := HLight.LCols[I].Position;
+  end;
+  for I := 0 to 9 do
+  begin
+    if I < 9 then J := Lvals.ColPos[I + 1] - Lvals.ColPos[I]
+    else J := 32767 - Lvals.ColPos[9];
+    if J > 1 then Lvals.sCDiv[I] := 1 / J
+    else Lvals.sCDiv[I] := 1;
+  end;
+  for I := 0 to 3 do
+  begin
+    Lvals.PLValigned.ColInt[I] := ColAToSVec(HLight.ICols[I].Color,
+      Lvals.bCalcPixColSqr);
+    Lvals.IColPos[I] := HLight.ICols[I].Position;
+  end;
+  for I := 0 to 3 do
+  begin
+    if I < 3 then J := Lvals.IColPos[I + 1] - Lvals.IColPos[I]
+    else J := 32767 - Lvals.IColPos[3];
+    if J > 1 then Lvals.sICDiv[I] := 1 / J
+    else Lvals.sICDiv[I] := 1;
   end;
 end;
 
