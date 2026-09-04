@@ -68,9 +68,10 @@ current parity renders reproducible while making reflection omissions visible
 in the event log. `--reflection off` suppresses that post step explicitly.
 `--reflection post` enables the first headless formula-ray reflection pass:
 surface hits are reconstructed from the z-buffer, reflected rays are marched
-through the formula DE, and reflected background/formula hits are blended into
-the RGB output up to the saved `SRreflectioncount`. Transmission is detected
-and reported but still needs the full Windows `CalcSR` transmission port.
+through the formula DE, and reflected background/formula hits are accumulated
+through specular light vectors up to the saved `SRreflectioncount`.
+Transmission is detected and reported but still needs the full Windows
+`CalcSR` transmission port.
 
 Current fidelity limits:
 
@@ -82,9 +83,9 @@ Current fidelity limits:
   light-map lights are reported as unsupported in the shading event;
 - saved depth fog and two-color dynamic fog are supported; visible volumetric
   light shapes still need parity validation;
-- specular reflection has an initial headless formula-ray post pass, but
-  transmission and exact Windows `CalcSR` vector paint parity still need a
-  GUI-free port;
+- specular reflection has an initial headless formula-ray vector accumulation
+  pass, but transmission and exact Windows `CalcSR`/`CalcPixelColorSvec`
+  paint parity still need more GUI-free porting;
 - background maps, transparency, and the remaining GUI post-process chain still
   need GUI-free ports.
 

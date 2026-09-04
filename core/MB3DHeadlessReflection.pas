@@ -140,30 +140,41 @@ begin
   else Result := Round(Value);
 end;
 
-function ReflectionWeight(const LightVals: TLightVals; const Sample: TsiLight5;
-  const Status: THeadlessReflectionStatus): Single;
+function AbsorbWeight(const Absorb: TSVec): Single;
+begin
+  Result := Abs(Absorb[0]) * 0.3 + Abs(Absorb[1]) * 0.59 +
+    Abs(Absorb[2]) * 0.11;
+end;
+
+function ReflectionSpecularVector(const LightVals: TLightVals;
+  const Sample: TsiLight5; ZPosition: Single): TSVec;
 var
   ColorIndex, UpperIndex, LowerIndex: Integer;
   Weight, Spec: Single;
-  SpecColor: TSVec;
 begin
-  Result := 0;
-  if (Sample.Zpos >= 32768) or (Status.Amount <= 0) then Exit;
+  ClearSVec(Result);
+  if Sample.Zpos >= 32768 then Exit;
   if Sample.SIgradient > 32767 then
   begin
     ColorIndex := Round(((Sample.SIgradient - LightVals.sCiStart) *
-      LightVals.sCimul) * 16384);
+      LightVals.sCimul + LightVals.sColZmul * ZPosition) * 16384);
     if LightVals.bColCycling then ColorIndex := ColorIndex and 32767
     else if ColorIndex < 0 then
     begin
       Spec := LightVals.PLValigned.ColInt[0][3];
-      Result := Min(0.95, Max(0, Spec * Status.Amount));
+      Result[0] := Spec;
+      Result[1] := Spec;
+      Result[2] := Spec;
+      Result[3] := Spec;
       Exit;
     end
     else if ColorIndex > LightVals.IColPos[3] then
     begin
       Spec := LightVals.PLValigned.ColInt[3][3];
-      Result := Min(0.95, Max(0, Spec * Status.Amount));
+      Result[0] := Spec;
+      Result[1] := Spec;
+      Result[2] := Spec;
+      Result[3] := Spec;
       Exit;
     end;
     UpperIndex := 1;
@@ -180,43 +191,50 @@ begin
       Spec := LightVals.PLValigned.ColInt[UpperIndex][3] * Weight +
         LightVals.PLValigned.ColInt[LowerIndex][3] * (1 - Weight);
     end;
-    Result := Min(0.95, Max(0, Spec * Status.Amount));
+    Result[0] := Spec;
+    Result[1] := Spec;
+    Result[2] := Spec;
+    Result[3] := Spec;
     Exit;
   end;
 
   if (LightVals.iColOnOT and 1) = 0 then ColorIndex := Sample.SIgradient
   else ColorIndex := Sample.OTrap and $7FFF;
   ColorIndex := Round(MinMaxCS(-1e9, ((ColorIndex - LightVals.sCStart) *
-    LightVals.sCmul) * 16384, 1e9));
+    LightVals.sCmul + LightVals.sColZmul * ZPosition) * 16384, 1e9));
   UpperIndex := 5;
   if LightVals.bColCycling then ColorIndex := ColorIndex and 32767
-  else if ColorIndex < 0 then
-    SpecColor := LightVals.PLValigned.ColSpe[0]
-  else if ColorIndex >= LightVals.ColPos[9] then
-    SpecColor := LightVals.PLValigned.ColSpe[9]
   else
   begin
-    if LightVals.ColPos[UpperIndex] < ColorIndex then
-      repeat Inc(UpperIndex) until (UpperIndex = 10) or
-        (LightVals.ColPos[UpperIndex] >= ColorIndex)
-    else
-      while (UpperIndex > 1) and
-        (LightVals.ColPos[UpperIndex - 1] >= ColorIndex) do Dec(UpperIndex);
-    if LightVals.bNoColIpol then
-      SpecColor := LightVals.PLValigned.ColSpe[UpperIndex - 1]
-    else
+    if ColorIndex < 0 then
     begin
-      LowerIndex := UpperIndex - 1;
-      if UpperIndex > 9 then UpperIndex := 0;
-      Weight := (ColorIndex - LightVals.ColPos[LowerIndex]) *
-        LightVals.sCDiv[LowerIndex];
-      SpecColor := LinInterpolate2SVecs(
-        LightVals.PLValigned.ColSpe[UpperIndex],
-        LightVals.PLValigned.ColSpe[LowerIndex], Weight);
+      Result := LightVals.PLValigned.ColSpe[0];
+      Exit;
+    end
+    else if ColorIndex >= LightVals.ColPos[9] then
+    begin
+      Result := LightVals.PLValigned.ColSpe[9];
+      Exit;
     end;
   end;
-  Spec := Max0S(YofSVec(@SpecColor));
-  Result := Min(0.95, Max(0, Spec * Status.Amount));
+  if LightVals.ColPos[UpperIndex] < ColorIndex then
+    repeat Inc(UpperIndex) until (UpperIndex = 10) or
+      (LightVals.ColPos[UpperIndex] >= ColorIndex)
+  else
+    while (UpperIndex > 1) and
+      (LightVals.ColPos[UpperIndex - 1] >= ColorIndex) do Dec(UpperIndex);
+  if LightVals.bNoColIpol then
+    Result := LightVals.PLValigned.ColSpe[UpperIndex - 1]
+  else
+  begin
+    LowerIndex := UpperIndex - 1;
+    if UpperIndex > 9 then UpperIndex := 0;
+    Weight := (ColorIndex - LightVals.ColPos[LowerIndex]) *
+      LightVals.sCDiv[LowerIndex];
+    Result := LinInterpolate2SVecs(
+      LightVals.PLValigned.ColSpe[UpperIndex],
+      LightVals.PLValigned.ColSpe[LowerIndex], Weight);
+  end;
 end;
 
 procedure CalcObjectColors(const LightVals: TLightVals; const Sample: TsiLight5;
@@ -279,17 +297,20 @@ begin
     LightVals.sCmul + LightVals.sColZmul * ZPosition) * 16384, 1e9));
   UpperIndex := 5;
   if LightVals.bColCycling then ColorIndex := ColorIndex and 32767
-  else if ColorIndex < 0 then
+  else
   begin
-    SpecularColor := LightVals.PLValigned.ColSpe[0];
-    DiffuseColor := LightVals.PLValigned.ColDif[0];
-    Exit;
-  end
-  else if ColorIndex >= LightVals.ColPos[9] then
-  begin
-    SpecularColor := LightVals.PLValigned.ColSpe[9];
-    DiffuseColor := LightVals.PLValigned.ColDif[9];
-    Exit;
+    if ColorIndex < 0 then
+    begin
+      SpecularColor := LightVals.PLValigned.ColSpe[0];
+      DiffuseColor := LightVals.PLValigned.ColDif[0];
+      Exit;
+    end
+    else if ColorIndex >= LightVals.ColPos[9] then
+    begin
+      SpecularColor := LightVals.PLValigned.ColSpe[9];
+      DiffuseColor := LightVals.PLValigned.ColDif[9];
+      Exit;
+    end;
   end;
   if LightVals.ColPos[UpperIndex] < ColorIndex then
     repeat Inc(UpperIndex) until (UpperIndex = 10) or
@@ -499,16 +520,17 @@ end;
 function TraceReflectedColor(var MCT: TMCTparameter; var It3D: TIteration3Dext;
   const StartPos: TPos3D; const IncomingVec, Normal: TVec3D;
   const Header: TMandHeader10; const LightVals: TLightVals;
-  const Status: THeadlessReflectionStatus; Depth, MaxSteps: Integer;
+  const Status: THeadlessReflectionStatus; const Absorb: TSVec;
+  Depth, MaxSteps: Integer;
   out Color: array of Single): Boolean;
 var
   Ray, HitNormal: TVec3D;
   RayS: TSVec;
   Step, Total, DE, LastStep, RSF: Double;
-  MixAmount: Single;
   Rough: Single;
   Temp: TsiLight5;
   NextStart: TPos3D;
+  HitSpec, NextAbsorb: TSVec;
   RecColor: array[0..2] of Single;
   Hit: Boolean;
   Index, Component: Integer;
@@ -550,6 +572,8 @@ begin
   begin
     RayS := NormaliseSVector(DVecToSVec(Ray));
     BackgroundColorForRay(Header, LightVals, RayS, Color);
+    for Component := 0 to 2 do Color[Component] := Clamp01(Color[Component] *
+      s1d255) * Absorb[Component] * 255;
     Result := True;
     Exit;
   end;
@@ -566,17 +590,23 @@ begin
   RayS := NormaliseSVector(DVecToSVec(Ray));
   ShadeReflectedHit(Header, LightVals, Temp, RayS,
     Total * Header.dStepWidth + MCT.sZZstmitDif, Color);
+  HitSpec := ReflectionSpecularVector(LightVals, Temp,
+    Total * Header.dStepWidth + MCT.sZZstmitDif);
+  NextAbsorb := MultiplySVectors(Absorb, HitSpec);
+  for Component := 0 to 2 do
+    Color[Component] := Clamp01(Color[Component] * s1d255) *
+      NextAbsorb[Component] * 255;
   if Depth < Status.ReflectionCount then
   begin
-    MixAmount := ReflectionWeight(LightVals, Temp, Status);
-    if MixAmount > 0.001 then
+    ScaleSVectorV(@NextAbsorb, Status.Amount);
+    if AbsorbWeight(NextAbsorb) > 1e-4 then
     begin
       mCopyVec(@NextStart, @It3D.C1);
       if TraceReflectedColor(MCT, It3D, NextStart, Ray, HitNormal,
-        Header, LightVals, Status, Depth + 1, MaxSteps, RecColor) then
+        Header, LightVals, Status, NextAbsorb, Depth + 1, MaxSteps,
+        RecColor) then
         for Component := 0 to 2 do
-          Color[Component] := Color[Component] * (1 - MixAmount) +
-            RecColor[Component] * MixAmount;
+          Color[Component] := Color[Component] + RecColor[Component];
     end;
   end;
   Result := True;
@@ -594,14 +624,21 @@ var
   It3D: TIteration3Dext;
   Rect: TRect;
   X, Y, Index, Offset, Component: Integer;
-  ZZ, DE, BackStep, MixAmount: Double;
+  ZZ, DE, BackStep: Double;
   Normal, Incoming: TVec3D;
   StartPos: TPos3D;
+  Absorb: TSVec;
   RefColor: array[0..2] of Single;
+  CandidatePixels: Integer;
+  MaxAbsorb: Single;
+  DebugReflection: Boolean;
 begin
   Result := False;
   ErrorText := '';
   ReflectedPixels := 0;
+  CandidatePixels := 0;
+  MaxAbsorb := 0;
+  DebugReflection := GetEnvironmentVariable('MB3D_DEBUG_REFLECTION') <> '';
   if (Length(Samples) <> Header.Width * Header.Height) or
     (Length(Pixels) <> Header.Width * Header.Height * 3) then
   begin
@@ -637,8 +674,7 @@ begin
     begin
       Index := Y * Header.Width + X;
       if Samples[Index].Zpos >= 32768 then Continue;
-      MixAmount := ReflectionWeight(LightVals, Samples[Index], Status);
-      if MixAmount <= 0.001 then Continue;
+      Inc(CandidatePixels);
       MCT.bInsideRendering := InsideRendering;
       MCT.bCalcInside := InsideRendering;
       if MCT.bInAndOutside and ((Samples[Index].OTrap and $8000) <> 0) then
@@ -651,6 +687,11 @@ begin
       ZZ := (Sqr((8388351.5 - SampleEncodedDepth(Samples[Index])) /
         MCT.ZcMul + 1) - 1) / MCT.Zcorr;
       MCT.mZZ := ZZ;
+      Absorb := ReflectionSpecularVector(LightVals, Samples[Index],
+        ZZ * Header.dStepWidth + MCT.sZZstmitDif);
+      ScaleSVectorV(@Absorb, Status.Amount);
+      if AbsorbWeight(Absorb) > MaxAbsorb then MaxAbsorb := AbsorbWeight(Absorb);
+      if AbsorbWeight(Absorb) <= 1e-4 then Continue;
       mAddVecWeight(@It3D.C1, @MCT.mVgradsFOV, MCT.mZZ);
       MCT.msDEstop := MCT.DEstop * (1 + MCT.mZZ * MCT.mctDEstopFactor);
       DE := MCT.CalcDE(@It3D, @MCT);
@@ -661,15 +702,27 @@ begin
       mCopyVec(@StartPos, @It3D.C1);
       Incoming := MCT.mVgradsFOV;
       if not TraceReflectedColor(MCT, It3D, StartPos, Incoming, Normal,
-        Header, LightVals, Status, 1, 512, RefColor) then Continue;
+        Header, LightVals, Status, Absorb, 1, 512, RefColor) then Continue;
       Offset := Index * 3;
       for Component := 0 to 2 do
-        Pixels[Offset + Component] := ClampByte(Pixels[Offset + Component] *
-          (1 - MixAmount) + RefColor[Component] * MixAmount);
+        Pixels[Offset + Component] := ClampByte(Pixels[Offset + Component] +
+          RefColor[Component]);
       Inc(ReflectedPixels);
       IniIt3D(@MCT, @It3D);
     end;
   end;
+  if DebugReflection then
+    WriteLn('MB3D_EVENT {"type":"reflection-debug","candidatePixels":',
+      CandidatePixels, ',"maxAbsorb":', FormatFloat('0.######', MaxAbsorb),
+      ',"colSpe0":', FormatFloat('0.######',
+      YofSVec(@LightVals.PLValigned.ColSpe[0])), ',"colSpe5":',
+      FormatFloat('0.######', YofSVec(@LightVals.PLValigned.ColSpe[5])),
+      ',"colSpe9":', FormatFloat('0.######',
+      YofSVec(@LightVals.PLValigned.ColSpe[9])), ',"colIntAlpha0":',
+      FormatFloat('0.######', LightVals.PLValigned.ColInt[0][3]),
+      ',"colIntAlpha3":', FormatFloat('0.######',
+      LightVals.PLValigned.ColInt[3][3]),
+      '}');
   Result := True;
 end;
 
