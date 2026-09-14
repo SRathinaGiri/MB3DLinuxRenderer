@@ -35,13 +35,15 @@ The development executable is written to `build/linux-i386/mb3d_worker`.
 ```sh
 ./build/linux-i386/mb3d_worker \
   --animation scene.m3a \
-  --frame 0 \
-  --output frame-000000.png \
+  --frame 1 \
+  --output frame-000001.png \
   --threads 4 \
   --assets assets \
   --stereo off \
   --shadows off
 ```
+
+`--frame` is one-based to match Mandelbulb3D's Windows frame numbering.
 
 Use `--stereo on` to render separate `-L.png` and `-R.png` images. The CLI
 selects mono or stereo rendering; saved screen distance and other stereo

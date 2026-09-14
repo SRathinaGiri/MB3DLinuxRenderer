@@ -21,8 +21,227 @@ type
   TLightInfo = record
     Direction: TSVec;
     Color: TFloatRGB;
-    ShadowMask: Word;
+    ShadowMask: Integer;
+    HardShadowEnabled: Boolean;
+    HardShadowCalculated: Boolean;
+    DiffuseFunction: Integer;
+    SpecularPower: Integer;
   end;
+
+var
+  DiffCosTabNsmall: array[0..7, 0..127] of Single;
+  CosTablesReady: Boolean = False;
+
+procedure EnsureCosTables;
+var
+  I, J, K, L: Integer;
+  D: Double;
+  E: Extended;
+  TmpTabSmall: array[0..127] of Single;
+begin
+  if CosTablesReady then Exit;
+  for I := 0 to 127 do
+  begin
+    D := 1 - (I - 2) / 60;
+    if D > 0.15 then DiffCosTabNsmall[0][I] := (D - 0.08) * 1.0869565
+    else if D <= 0 then DiffCosTabNsmall[0][I] := 0
+    else DiffCosTabNsmall[0][I] := Power(D, Max(1, (0.505 - D) * 3.8));
+    DiffCosTabNsmall[1][I] := Sqr(Clamp0D(D));
+    DiffCosTabNsmall[2][I] := D * s05 + s05;
+    DiffCosTabNsmall[3][I] := Sqr(D * s05 + s05);
+  end;
+  for K := 0 to 3 do
+  begin
+    for J := 0 to 127 do TmpTabSmall[J] := Sqrt(Max0S(DiffCosTabNsmall[K][J]));
+    for J := 0 to 127 do
+    begin
+      E := 0;
+      for I := 0 to 60 do
+      begin
+        L := Abs(J + I - 30);
+        if L < 128 then E := E + TmpTabSmall[L];
+      end;
+      DiffCosTabNsmall[K + 4][J] := Sqr(E * 0.011 + Sqr(E * 0.007));
+    end;
+  end;
+  CosTablesReady := True;
+end;
+
+function HeadlessGetCosTabVal(Tnr: Integer; const DotP, Rough: Single): Single;
+var
+  IP: Integer;
+  T: Single;
+  W: TSVec;
+  P1: TPSingleArray;
+begin
+  if Tnr < 0 then Tnr := 0
+  else if Tnr > 3 then Tnr := 3;
+  T := 62 - 60 * DotP;
+  IP := Trunc(T) - 1;
+  if IP < 0 then
+  begin
+    IP := 0;
+    T := 0;
+  end
+  else if IP > 124 then
+  begin
+    IP := 124;
+    T := 1;
+  end
+  else T := Frac(T);
+  W := MakeSplineCoeff(T);
+  P1 := @DiffCosTabNsmall[Tnr][IP];
+  Result := P1[0] * W[0] + P1[1] * W[1] + P1[2] * W[2] + P1[3] * W[3];
+  P1 := @DiffCosTabNsmall[Tnr + 4][IP];
+  Result := Result + Rough * (P1[0] * W[0] + P1[1] * W[1] +
+    P1[2] * W[2] + P1[3] * W[3] - Result);
+end;
+
+function DotOf2VecNormalize(const Norm, Light, View: TSVec): Single;
+var D2: Single;
+begin
+  D2 := 2 * (Norm[0] * View[0] + Norm[1] * View[1] +
+    Norm[2] * View[2]);
+  Result := Light[0] * (View[0] - Norm[0] * D2) +
+    Light[1] * (View[1] - Norm[1] * D2) +
+    Light[2] * (View[2] - Norm[2] * D2);
+end;
+
+procedure CalcViewVecForPixel(var ViewVec: TSVec; var Header: TMandHeader10;
+  X, Y: Integer);
+var
+  CX, CY, FOVY, Aspect, D: Double;
+begin
+  if (Header.bPlanarOptic and 3) = 2 then
+  begin
+    FOVY := Pi;
+    Aspect := 2;
+  end
+  else
+  begin
+    FOVY := Header.dFOVy * Pid180;
+    Aspect := Header.Width / Header.Height;
+  end;
+  CX := (CalcXoff(@Header) - (X + 1) / Header.Width) * FOVY * Aspect;
+  CY := (Y / Header.Height - 0.5) * FOVY;
+  if (Header.bPlanarOptic and 3) = 1 then
+  begin
+    ViewVec[0] := -CX;
+    ViewVec[1] := CY;
+    D := MinCS(1.5, MaxCS(s001, FOVY * s05));
+    ViewVec[2] := Cos(D) * D / Sin(D);
+    NormaliseSVectorVar(ViewVec);
+  end
+  else if (Header.bPlanarOptic and 3) = 2 then
+    BuildViewVectorSphereFOV(CY, CX, @ViewVec)
+  else
+    BuildViewVectorFOV(CY, CX, @ViewVec);
+end;
+
+procedure CalcObjectColors(const LightVals: TLightVals; const Sample: TsiLight5;
+  ZPosition: Single; IsInside: Boolean; out DiffuseColor,
+  SpecularColor: TSVec);
+var
+  ColorIndex, LowerIndex, UpperIndex: Integer;
+  Weight: Single;
+begin
+  if IsInside then
+  begin
+    ColorIndex := Round(((Sample.SIgradient - LightVals.sCiStart) *
+      LightVals.sCimul + LightVals.sColZmul * ZPosition) * 16384);
+    if LightVals.bColCycling then ColorIndex := ColorIndex and 32767
+    else
+    begin
+      if ColorIndex < 0 then
+      begin
+        DiffuseColor := LightVals.PLValigned.ColInt[0];
+        SpecularColor[0] := DiffuseColor[3];
+        SpecularColor[1] := DiffuseColor[3];
+        SpecularColor[2] := DiffuseColor[3];
+        SpecularColor[3] := DiffuseColor[3];
+        DiffuseColor[3] := 0;
+        Exit;
+      end
+      else if ColorIndex > LightVals.IColPos[3] then
+      begin
+        DiffuseColor := LightVals.PLValigned.ColInt[3];
+        SpecularColor[0] := DiffuseColor[3];
+        SpecularColor[1] := DiffuseColor[3];
+        SpecularColor[2] := DiffuseColor[3];
+        SpecularColor[3] := DiffuseColor[3];
+        DiffuseColor[3] := 0;
+        Exit;
+      end;
+    end;
+    UpperIndex := 1;
+    while (UpperIndex < 4) and
+      (LightVals.IColPos[UpperIndex] < ColorIndex) do Inc(UpperIndex);
+    if LightVals.bNoColIpol then
+      DiffuseColor := LightVals.PLValigned.ColInt[UpperIndex - 1]
+    else
+    begin
+      LowerIndex := UpperIndex - 1;
+      UpperIndex := UpperIndex and 3;
+      Weight := (ColorIndex - LightVals.IColPos[LowerIndex]) *
+        LightVals.sICDiv[LowerIndex];
+      DiffuseColor := LinInterpolate2SVecs(
+        LightVals.PLValigned.ColInt[UpperIndex],
+        LightVals.PLValigned.ColInt[LowerIndex], Weight);
+    end;
+    SpecularColor[0] := DiffuseColor[3];
+    SpecularColor[1] := DiffuseColor[3];
+    SpecularColor[2] := DiffuseColor[3];
+    SpecularColor[3] := DiffuseColor[3];
+    DiffuseColor[3] := 0;
+    Exit;
+  end;
+
+  if (LightVals.iColOnOT and 1) = 0 then ColorIndex := Sample.SIgradient
+  else ColorIndex := Sample.OTrap and $7FFF;
+  ColorIndex := Round(MinMaxCS(-1e9, ((ColorIndex - LightVals.sCStart) *
+    LightVals.sCmul + LightVals.sColZmul * ZPosition) * 16384, 1e9));
+  UpperIndex := 5;
+  if LightVals.bColCycling then ColorIndex := ColorIndex and 32767
+  else
+  begin
+    if ColorIndex < 0 then
+    begin
+      SpecularColor := LightVals.PLValigned.ColSpe[0];
+      DiffuseColor := LightVals.PLValigned.ColDif[0];
+      Exit;
+    end
+    else if ColorIndex >= LightVals.ColPos[9] then
+    begin
+      SpecularColor := LightVals.PLValigned.ColSpe[9];
+      DiffuseColor := LightVals.PLValigned.ColDif[9];
+      Exit;
+    end;
+  end;
+  if LightVals.ColPos[UpperIndex] < ColorIndex then
+    repeat Inc(UpperIndex) until (UpperIndex = 10) or
+      (LightVals.ColPos[UpperIndex] >= ColorIndex)
+  else
+    while (UpperIndex > 1) and
+      (LightVals.ColPos[UpperIndex - 1] >= ColorIndex) do Dec(UpperIndex);
+  if LightVals.bNoColIpol then
+  begin
+    SpecularColor := LightVals.PLValigned.ColSpe[UpperIndex - 1];
+    DiffuseColor := LightVals.PLValigned.ColDif[UpperIndex - 1];
+  end
+  else
+  begin
+    LowerIndex := UpperIndex - 1;
+    if UpperIndex > 9 then UpperIndex := 0;
+    Weight := (ColorIndex - LightVals.ColPos[LowerIndex]) *
+      LightVals.sCDiv[LowerIndex];
+    SpecularColor := LinInterpolate2SVecs(
+      LightVals.PLValigned.ColSpe[UpperIndex],
+      LightVals.PLValigned.ColSpe[LowerIndex], Weight);
+    DiffuseColor := LinInterpolate2SVecs(
+      LightVals.PLValigned.ColDif[UpperIndex],
+      LightVals.PLValigned.ColDif[LowerIndex], Weight);
+  end;
+end;
 
 function ClampByte(Value: Single): Byte;
 begin
@@ -79,7 +298,7 @@ function DepthColor(const Header: TMandHeader10; Y: Integer): TFloatRGB;
 var Position: Single;
     FunctionIndex: Integer;
 begin
-  if Header.Height > 1 then Position := Y / (Header.Height - 1)
+  if Header.Height > 0 then Position := Y / Header.Height
   else Position := 0.5;
   FunctionIndex := Header.Light.TBoptions shr 30;
   if FunctionIndex = 1 then Position := Sqr(Position)
@@ -183,18 +402,21 @@ var Lights: array[0..5] of TLightInfo;
     Sample: TsiLight5;
     Normal: TSVec;
     BaseColor, AmbientColor, BackgroundColor, FogColor, FogColor2: TFloatRGB;
+    DiffuseColor, SpecularColor, ViewVec: TSVec;
     AmbientAmount, AmbientFactor, AmbientStrength, DiffuseAmount,
-    DiffuseShadowing, DotValue, Lamp, Shadow, TopWeight, DepthAmount,
-    FogAmount, FogAmount2, FogTotal, DepthFogTotal, ZPosition: Single;
-    ColorPosition, Component, Index, LightIndex, PixelOffset: Integer;
-    FogRayCount, Y: Integer;
-    OuterStart, OuterMultiplier, InnerStart, InnerMultiplier: Single;
+    DiffuseShadowing, DotRaw, DotValue, Lamp, Shadow, SpecularAmount,
+    TopWeight, DepthAmount, FogAmount, FogAmount2, FogTotal,
+    DepthFogTotal, Roughness, ZPosition: Single;
+    Component, Index, LightIndex, PixelOffset: Integer;
+    FogRayCount, X, Y: Integer;
     ZCorrection, ZMultiplier, ZStartDifference: Double;
     AngleX, AngleY: Double;
-    IsInside, NoInterpolation: Boolean;
+    IsInside: Boolean;
+    NoHardShadow, SubtractAmbientShadow: Boolean;
     GammaAmount: Single;
     GammaMode: Integer;
 begin
+  EnsureCosTables;
   SetLength(Pixels, Length(Samples) * 3);
   DirectionalLights := 0;
   SkippedLights := 0;
@@ -219,7 +441,15 @@ begin
         RotateSVectorReverse(@Lights[DirectionalLights].Direction,
           @Header.hVGrads);
       Lamp := ShortFloatToSingle(@Header.Light.Lights[LightIndex].Lamp);
-      Lights[DirectionalLights].ShadowMask := $400 shl LightIndex;
+      Lights[DirectionalLights].ShadowMask := LightVals.iHSmask[LightIndex];
+      Lights[DirectionalLights].HardShadowEnabled :=
+        LightVals.iHSenabled[LightIndex] <> 0;
+      Lights[DirectionalLights].HardShadowCalculated :=
+        LightVals.iHScalced[LightIndex] <> 0;
+      Lights[DirectionalLights].DiffuseFunction :=
+        LightVals.iLightFuncDiff[LightIndex];
+      Lights[DirectionalLights].SpecularPower :=
+        LightVals.iLightPowFunc[LightIndex];
       for Component := 0 to 2 do
         Lights[DirectionalLights].Color[Component] :=
           Header.Light.Lights[LightIndex].Lcolor[Component] * Lamp;
@@ -230,13 +460,10 @@ begin
   AmbientStrength := (Header.Light.TBpos[11] and $FF) / 53;
   DiffuseShadowing := Header.Light.Lights[3].AdditionalByteEx / 256;
   DiffuseAmount := Header.Light.TBpos[5] * 0.02;
-  NoInterpolation := (Header.Light.Lights[3].FreeByte and 1) <> 0;
   GammaMode := (Header.Light.TBoptions shr 23) and $3F;
   if GammaMode < 32 then GammaAmount := 1 - GammaMode / 32
   else if GammaMode > 32 then GammaAmount := (GammaMode - 32) / 31
   else GammaAmount := 0;
-  CalcSCstartAndSCmul(@Header, OuterStart, OuterMultiplier, False);
-  CalcSCstartAndSCmul(@Header, InnerStart, InnerMultiplier, True);
   CalcPPZvals(Header, ZCorrection, ZMultiplier, ZStartDifference);
   FogColor[0] := Header.Light.DynFogR;
   FogColor[1] := Header.Light.DynFogG;
@@ -248,7 +475,10 @@ begin
     Sample := Samples[Index];
     PixelOffset := Index * 3;
     Y := Index div Header.Width;
+    X := Index - Y * Header.Width;
     BaseColor := DepthColor(Header, Y);
+    ZPosition := DecodeZPosition(Header, Sample, ZCorrection, ZMultiplier,
+      ZStartDifference);
     if Sample.Zpos >= 32768 then
     begin
       BackgroundColor := BaseColor;
@@ -265,21 +495,10 @@ begin
       else AmbientFactor := 1 - AmbientStrength * Shadow;
       AmbientFactor := Max(0, Min(1, AmbientFactor));
       IsInside := Sample.SIgradient > 32767;
-      if IsInside then
-      begin
-        ColorPosition := Round((Sample.SIgradient - InnerStart) *
-          InnerMultiplier * 16384);
-        BaseColor := InteriorColor(Header.Light, ColorPosition, NoInterpolation);
-      end;
-      if not IsInside then
-      begin
-        ColorPosition := Round((Sample.SIgradient - OuterStart) *
-          OuterMultiplier * 16384);
-        if (Header.Light.Lights[1].FreeByte and 1) <> 0 then
-          ColorPosition := Round(((Sample.OTrap and $7FFF) - OuterStart) *
-            OuterMultiplier * 16384);
-        BaseColor := SurfaceColor(Header.Light, ColorPosition, NoInterpolation);
-      end;
+      CalcObjectColors(LightVals, Sample, ZPosition, IsInside, DiffuseColor,
+        SpecularColor);
+      for Component := 0 to 2 do
+        BaseColor[Component] := DiffuseColor[Component] * 255;
 
       TopWeight := (Normal[1] + 1) * 0.5;
       AmbientColor := InterpolateRGB(Header.Light.AmbCol2,
@@ -289,21 +508,74 @@ begin
           AmbientColor[Component] * AmbientAmount * AmbientFactor / 255;
       for LightIndex := 0 to DirectionalLights - 1 do
       begin
-        DotValue := Normal[0] * Lights[LightIndex].Direction[0] +
+        DotRaw := Normal[0] * Lights[LightIndex].Direction[0] +
           Normal[1] * Lights[LightIndex].Direction[1] +
           Normal[2] * Lights[LightIndex].Direction[2];
+        Roughness := (Sample.RoughZposFine and $FF) *
+          LightVals.sRoughnessFactor;
+        DotValue := HeadlessGetCosTabVal(Lights[LightIndex].DiffuseFunction,
+          DotRaw, Roughness);
         if DotValue > 0 then
         begin
-          if CalculateHardShadows and ((Header.bCalculateHardShadow and
-            (Lights[LightIndex].ShadowMask shr 8)) <> 0) and
-            ((Sample.Shadow and Lights[LightIndex].ShadowMask) = 0) then
+          NoHardShadow := (Lights[LightIndex].ShadowMask = -1) or
+            ((Sample.Shadow and Lights[LightIndex].ShadowMask) = 0) or
+            (not Lights[LightIndex].HardShadowCalculated);
+          if NoHardShadow then
+          begin
+            SubtractAmbientShadow := Lights[LightIndex].HardShadowCalculated xor
+              Lights[LightIndex].HardShadowEnabled;
+            if SubtractAmbientShadow then
+              DotValue := DotValue * AmbientFactor
+            else
+              DotValue := DotValue * (1 + DiffuseShadowing *
+                (AmbientFactor - 1));
+            if Lights[LightIndex].ShadowMask = -1 then
+              DotValue := DotValue * (Sample.Shadow shr 10) * s1d63;
+          end
+          else
             DotValue := 0;
-          DotValue := DotValue * (1 + DiffuseShadowing *
-            (AmbientFactor - 1));
-          for Component := 0 to 2 do
-            BackgroundColor[Component] := BackgroundColor[Component] +
-              BaseColor[Component] * Lights[LightIndex].Color[Component] *
-              DotValue * DiffuseAmount / 255;
+          if DotValue > 0 then
+          begin
+            for Component := 0 to 2 do
+              BackgroundColor[Component] := BackgroundColor[Component] +
+                BaseColor[Component] * Lights[LightIndex].Color[Component] *
+                DotValue * DiffuseAmount / 255;
+          end;
+        end;
+      end;
+      CalcViewVecForPixel(ViewVec, Header, X, Y);
+      for LightIndex := 0 to DirectionalLights - 1 do
+      begin
+        SpecularAmount := DotOf2VecNormalize(Normal,
+          Lights[LightIndex].Direction, ViewVec);
+        if SpecularAmount > 0 then
+        begin
+          NoHardShadow := (Lights[LightIndex].ShadowMask = -1) or
+            ((Sample.Shadow and Lights[LightIndex].ShadowMask) = 0) or
+            (not Lights[LightIndex].HardShadowCalculated);
+          if NoHardShadow then
+          begin
+            Roughness := (Sample.RoughZposFine and $FF) *
+              LightVals.sRoughnessFactor;
+            SpecularAmount := (1 + MinCS(1, Roughness * 2) *
+              (1 / Lights[LightIndex].SpecularPower - 1)) *
+              LightVals.sSpec *
+              FastIntPow(SpecularAmount, Lights[LightIndex].SpecularPower);
+            SubtractAmbientShadow := Lights[LightIndex].HardShadowCalculated xor
+              Lights[LightIndex].HardShadowEnabled;
+            if SubtractAmbientShadow then
+              SpecularAmount := SpecularAmount * AmbientFactor
+            else
+              SpecularAmount := SpecularAmount * (1 + DiffuseShadowing *
+                (AmbientFactor - 1));
+            if Lights[LightIndex].ShadowMask = -1 then
+              SpecularAmount := SpecularAmount * (Sample.Shadow shr 10) *
+                s1d63;
+            for Component := 0 to 2 do
+              BackgroundColor[Component] := BackgroundColor[Component] +
+                SpecularColor[Component] *
+                Lights[LightIndex].Color[Component] * SpecularAmount;
+          end;
         end;
       end;
       DepthAmount := Max(0, (Integer(Sample.Zpos) - 28000) *
@@ -324,8 +596,6 @@ begin
     if LightVals.bVolLight then
       FogRayCount := ConvertVolumetricLight(Sample.Shadow)
     else FogRayCount := Sample.Shadow and $3FF;
-    ZPosition := DecodeZPosition(Header, Sample, ZCorrection, ZMultiplier,
-      ZStartDifference);
     FogAmount := (FogRayCount - LightVals.sShad -
       LightVals.sShadZmul * ZPosition) * LightVals.sShadGr;
     if (LightVals.bDFogOptions and 2) <> 0 then FogAmount := Max(0, FogAmount);

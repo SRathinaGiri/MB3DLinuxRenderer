@@ -7,7 +7,8 @@ uses
   SysUtils, Math, TypeDefinitions, MB3DAnimationModel, MB3DAnimationHeaderAdapter,
   MB3DResourceBundle, MB3DCompiledFormulaCode, MB3DAnimationHeaderInterpolation,
   MB3DAnimationHeaderAddonInterpolation, MB3DOutputPlan,
-  MB3DHeadlessCustomFormulas, MB3DHeadlessRenderer;
+  MB3DHeadlessCustomFormulas, MB3DHeadlessRenderer, MB3DHeadlessAmbientShadow,
+  MB3DHeadlessReflection;
 
 const
   ExitSuccess = 0;
@@ -27,12 +28,15 @@ type
     StereoRequest: TMB3DStereoRequest;
     OutputWidth: Integer;
     OutputHeight: Integer;
-    CalculateHardShadows: Boolean;
+    HardShadowMode: THeadlessHardShadowMode;
+    AmbientMode: THeadlessAmbientMode;
+    ReflectionMode: THeadlessReflectionMode;
   end;
 
 procedure PrintUsage;
 begin
-  WriteLn('Usage: mb3d-worker --animation PATH --frame N --output PATH [--threads N] [--assets PATH] [--stereo on|off] [--size WIDTHxHEIGHT] [--shadows on|off]');
+  WriteLn('Usage: mb3d-worker --animation PATH --frame N --output PATH [--threads N] [--assets PATH] [--stereo on|off] [--size WIDTHxHEIGHT] [--shadows on|off] [--hard-shadow inline|post|off] [--ambient auto|classic24|radial24|off] [--reflection report|post|off]');
+  WriteLn('       --frame is one-based to match Mandelbulb3D frame numbering');
   WriteLn('       mb3d-worker --help | --version');
 end;
 
@@ -42,6 +46,37 @@ begin
     srOn: Result := 'on';
   else
     Result := 'off';
+  end;
+end;
+
+function AmbientModeName(const AmbientMode: THeadlessAmbientMode): string;
+begin
+  case AmbientMode of
+    hamClassic24: Result := 'classic24';
+    hamRadial24: Result := 'radial24';
+    hamOff: Result := 'off';
+  else
+    Result := 'auto';
+  end;
+end;
+
+function HardShadowModeName(const HardShadowMode: THeadlessHardShadowMode): string;
+begin
+  case HardShadowMode of
+    hhsmInline: Result := 'inline';
+    hhsmPost: Result := 'post';
+  else
+    Result := 'off';
+  end;
+end;
+
+function ReflectionModeName(const ReflectionMode: THeadlessReflectionMode): string;
+begin
+  case ReflectionMode of
+    hrmOff: Result := 'off';
+    hrmPost: Result := 'post';
+  else
+    Result := 'report';
   end;
 end;
 
@@ -134,7 +169,9 @@ begin
   Request.ThreadCount := 1;
   Request.AssetsDirectory := 'assets';
   Request.StereoRequest := srOff;
-  Request.CalculateHardShadows := True;
+  Request.HardShadowMode := hhsmInline;
+  Request.AmbientMode := hamAuto;
+  Request.ReflectionMode := hrmReport;
   Index := 1;
   while Index <= ParamCount do
   begin
@@ -176,12 +213,52 @@ begin
     else if Argument = '--shadows' then
     begin
       if not RequireValue(Argument, Index, TextValue) then Exit(ExitInvalidArguments);
-      if SameText(TextValue, 'on') then Request.CalculateHardShadows := True
-      else if SameText(TextValue, 'off') then Request.CalculateHardShadows := False
+      if SameText(TextValue, 'on') then Request.HardShadowMode := hhsmInline
+      else if SameText(TextValue, 'off') then Request.HardShadowMode := hhsmOff
       else
       begin
         WriteLn(StdErr, 'Invalid value for --shadows: ', TextValue,
           ' (expected on or off)');
+        Exit(ExitInvalidArguments);
+      end;
+    end
+    else if Argument = '--hard-shadow' then
+    begin
+      if not RequireValue(Argument, Index, TextValue) then Exit(ExitInvalidArguments);
+      if SameText(TextValue, 'inline') then Request.HardShadowMode := hhsmInline
+      else if SameText(TextValue, 'post') then Request.HardShadowMode := hhsmPost
+      else if SameText(TextValue, 'off') then Request.HardShadowMode := hhsmOff
+      else
+      begin
+        WriteLn(StdErr, 'Invalid value for --hard-shadow: ', TextValue,
+          ' (expected inline, post, or off)');
+        Exit(ExitInvalidArguments);
+      end;
+    end
+    else if Argument = '--ambient' then
+    begin
+      if not RequireValue(Argument, Index, TextValue) then Exit(ExitInvalidArguments);
+      if SameText(TextValue, 'auto') then Request.AmbientMode := hamAuto
+      else if SameText(TextValue, 'classic24') then Request.AmbientMode := hamClassic24
+      else if SameText(TextValue, 'radial24') then Request.AmbientMode := hamRadial24
+      else if SameText(TextValue, 'off') then Request.AmbientMode := hamOff
+      else
+      begin
+        WriteLn(StdErr, 'Invalid value for --ambient: ', TextValue,
+          ' (expected auto, classic24, radial24, or off)');
+        Exit(ExitInvalidArguments);
+      end;
+    end
+    else if Argument = '--reflection' then
+    begin
+      if not RequireValue(Argument, Index, TextValue) then Exit(ExitInvalidArguments);
+      if SameText(TextValue, 'report') then Request.ReflectionMode := hrmReport
+      else if SameText(TextValue, 'post') then Request.ReflectionMode := hrmPost
+      else if SameText(TextValue, 'off') then Request.ReflectionMode := hrmOff
+      else
+      begin
+        WriteLn(StdErr, 'Invalid value for --reflection: ', TextValue,
+          ' (expected report, post, or off)');
         Exit(ExitInvalidArguments);
       end;
     end
@@ -207,7 +284,15 @@ begin
         WriteLn(StdErr, 'Invalid value for ', Argument, ': ', TextValue);
         Exit(ExitInvalidArguments);
       end;
-      if Argument = '--frame' then Request.FrameNumber := Value
+      if Argument = '--frame' then
+      begin
+        if Value = 0 then
+        begin
+          WriteLn(StdErr, '--frame is one-based; use --frame 1 for the first frame');
+          Exit(ExitInvalidArguments);
+        end;
+        Request.FrameNumber := Value;
+      end
       else if Value = 0 then
       begin
         WriteLn(StdErr, '--threads must be greater than zero');
@@ -254,7 +339,7 @@ var
   InterpolatedFormulaCount: Integer;
   OutputPlan: TMB3DOutputPlan;
   RenderHeader: TMandHeader10;
-  FormulaIndex: Integer;
+  FormulaIndex, InternalFrameNumber: Integer;
 begin
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow,
     exUnderflow, exPrecision]);
@@ -276,7 +361,8 @@ begin
       end
       else
       begin
-        if not Animation.TryLocateFrame(Request.FrameNumber, KeyFrameIndex,
+        InternalFrameNumber := Request.FrameNumber - 1;
+        if not Animation.TryLocateFrame(InternalFrameNumber, KeyFrameIndex,
           SubFrame, ErrorText) then
         begin
           WriteLn(StdErr, 'Unable to resolve animation frame: ', ErrorText);
@@ -341,7 +427,9 @@ begin
               ',"options":', HeaderAddon.Formulas[FormulaIndex].iOptionCount, '}');
           end;
         WriteLn('MB3D_EVENT {"type":"header","keyframe":', KeyFrameIndex,
-          ',"subframe":', SubFrame, ',"width":', Header.Width,
+          ',"subframe":', SubFrame, ',"requestedFrame":',
+          Request.FrameNumber, ',"internalFrame":', InternalFrameNumber,
+          ',"width":', Header.Width,
           ',"height":', Header.Height, ',"calc3D":', Header.bCalc3D,
           ',"insideOptions":', HeaderAddon.bOptions2, ',"zStart":',
           FloatToStr(Header.dZstart), ',"zEnd":', FloatToStr(Header.dZend),
@@ -360,20 +448,24 @@ begin
           StereoRequestName(Request.StereoRequest), '","savedHeaderMode":',
           Header.bStereoMode, ',"enabled":', LowerCase(BoolToStr(StereoEnabled, True)),
           ',"leftMode":4,"rightMode":3}');
-        WriteLn('MB3D_EVENT {"type":"render-options","hardShadows":',
-          LowerCase(BoolToStr(Request.CalculateHardShadows, True)), '}');
+        WriteLn('MB3D_EVENT {"type":"render-options","hardShadow":"',
+          HardShadowModeName(Request.HardShadowMode),
+          '","ambient":"', AmbientModeName(Request.AmbientMode),
+          '","reflection":"', ReflectionModeName(Request.ReflectionMode), '"}');
         if OutputPlan.Stereo then
           WriteLn('MB3D_EVENT {"type":"outputs","left":"', JsonString(OutputPlan.LeftFile),
             '","right":"', JsonString(OutputPlan.RightFile), '"}')
         else
           WriteLn('MB3D_EVENT {"type":"outputs","mono":"', JsonString(OutputPlan.MonoFile), '"}');
         WriteLn('MB3D_EVENT {"type":"started","frame":', Request.FrameNumber,
+          ',"internalFrame":', InternalFrameNumber,
           ',"keyframes":', Animation.KeyFrameCount, '}');
         RenderHeader := Header;
         if OutputPlan.Stereo then
         begin
           if not RenderMB3DFrame(RenderHeader, 4, Request.ThreadCount,
-            Request.CalculateHardShadows,
+            Request.HardShadowMode, Request.AmbientMode,
+            Request.ReflectionMode,
             OutputPlan.LeftFile, ErrorText) then
           begin
             WriteLn(StdErr, 'Left-eye render failed: ', ErrorText);
@@ -385,7 +477,8 @@ begin
               JsonString(OutputPlan.LeftFile), '"}');
             RenderHeader := Header;
             if not RenderMB3DFrame(RenderHeader, 3, Request.ThreadCount,
-              Request.CalculateHardShadows,
+              Request.HardShadowMode, Request.AmbientMode,
+              Request.ReflectionMode,
               OutputPlan.RightFile, ErrorText) then
             begin
               WriteLn(StdErr, 'Right-eye render failed: ', ErrorText);
@@ -400,7 +493,7 @@ begin
           end;
         end
         else if not RenderMB3DFrame(RenderHeader, 0, Request.ThreadCount,
-          Request.CalculateHardShadows,
+          Request.HardShadowMode, Request.AmbientMode, Request.ReflectionMode,
           OutputPlan.MonoFile, ErrorText) then
         begin
           WriteLn(StdErr, 'Render failed: ', ErrorText);
